@@ -1,9 +1,11 @@
 
 <center>
-<img src="https://raw.githubusercontent.com/Matilabo/cobblelocke/textures/gui/title.png" width="700">  
+<img src="https://github.com/Matilabo/cobblelocke/blob/main/src/main/resources/assets/cobblelocke/textures/gui/title.png" width="900">  
 </center>
 
-To download the modpack, visit the [Modrinth page](https://modrinth.com/mod/cobblelocke-cobblemon).
+A Minecraft mod!
+
+To download the mod, visit the [Modrinth page](https://modrinth.com/mod/cobblelocke-cobblemon).
 
 To report an issue, check the [Issues tab](https://github.com/Matilabo/cobblelocke/issues).
 
