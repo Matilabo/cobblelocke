@@ -1,0 +1,10 @@
+{
+  "modmenu.cobblelocke.title": "Cobblelocke",
+  "screen.cobblelocke.title": "Cobblelocke",
+  "screen.cobblelocke.header": "★ Cobblelocke ★",
+  "screen.cobblelocke.subtitle": "Configure your Randomlocke",
+  "screen.cobblelocke.readonly": "Read only - only the host can change these",
+  "screen.cobblelocke.start_run": "★ Start Run ★",
+  "screen.cobblelocke.save": "Save",
+  "screen.cobblelocke.done": "Done"
+}

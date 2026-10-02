@@ -1,0 +1,14 @@
+{
+  "id": "action_default",
+  "fps": 20,
+  "width": 320,
+  "height": 180,
+  "transparent": true,
+  "smooth": true,
+  "durationMs": 2900,
+  "battleAtMs": 1450,
+  "coverAtMs": 300,
+  "coverUntilMs": 1900,
+  "fadeOutMs": 0,
+  "frames": ["000.png|000.a.png", "000.png|001.a.png", "000.png|002.a.png", "000.png|003.a.png", "000.png|004.a.png", "000.png|005.a.png", "000.png", "007.jpg", "008.jpg", "009.jpg", "010.jpg", "011.jpg", "012.jpg", "013.jpg", "014.jpg", "015.jpg", "016.jpg", "017.jpg", "018.jpg", "019.jpg", "020.jpg", "021.jpg", "022.jpg", "023.jpg", "024.jpg", "025.jpg", "026.jpg", "027.jpg", "028.jpg", "029.jpg|029.a.png", "030.jpg|030.a.png", "031.jpg|031.a.png", "032.jpg|032.a.png", "033.jpg|033.a.png", "034.jpg|034.a.png", "035.jpg|035.a.png", "036.jpg|035.a.png", "037.jpg|037.a.png", "038.jpg|038.a.png", "039.jpg|039.a.png", "040.jpg|040.a.png", "041.jpg|041.a.png", "042.jpg|042.a.png", "043.jpg|043.a.png", "044.jpg|044.a.png", "045.jpg|045.a.png", "046.jpg|046.a.png", "047.jpg|047.a.png", "048.jpg|048.a.png", "049.jpg|049.a.png", "050.jpg|050.a.png", "051.jpg|051.a.png", "052.jpg|052.a.png", "053.jpg|053.a.png", "054.jpg|054.a.png", "055.jpg|055.a.png", "056.jpg|056.a.png", "057.jpg|057.a.png"]
+}

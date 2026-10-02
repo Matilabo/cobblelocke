@@ -1,0 +1,14 @@
+{
+  "id": "action_cave",
+  "fps": 24,
+  "width": 320,
+  "height": 180,
+  "transparent": true,
+  "smooth": true,
+  "durationMs": 3125,
+  "battleAtMs": 2375,
+  "coverAtMs": 958,
+  "coverUntilMs": 2375,
+  "fadeOutMs": 0,
+  "frames": ["000.png|000.a.png", "001.jpg|001.a.png", "002.jpg|002.a.png", "003.jpg|003.a.png", "004.jpg|004.a.png", "005.jpg|005.a.png", "006.jpg|006.a.png", "007.jpg|007.a.png", "008.jpg|008.a.png", "009.jpg|009.a.png", "010.jpg|010.a.png", "011.jpg|011.a.png", "012.jpg|012.a.png", "013.jpg|013.a.png", "014.jpg|014.a.png", "015.jpg|015.a.png", "016.jpg|016.a.png", "017.jpg|017.a.png", "018.jpg|018.a.png", "019.jpg|019.a.png", "020.jpg|020.a.png", "021.jpg|021.a.png", "022.jpg|022.a.png", "023.png", "024.png", "025.png", "026.png", "026.png", "026.png", "029.png", "030.png", "031.jpg", "032.jpg", "033.jpg", "034.jpg", "035.jpg", "036.jpg", "037.jpg", "038.jpg", "039.jpg", "040.jpg", "041.jpg", "042.jpg", "043.jpg", "044.jpg", "045.jpg", "046.jpg", "047.jpg", "048.jpg", "049.jpg", "050.jpg", "051.jpg", "052.jpg", "053.jpg", "054.jpg", "055.jpg", "056.jpg", "057.jpg|057.a.png", "058.jpg|058.a.png", "059.jpg|059.a.png", "060.jpg|060.a.png", "061.jpg|061.a.png", "062.jpg|062.a.png", "063.jpg|063.a.png", "064.jpg|064.a.png", "065.jpg|065.a.png", "066.jpg|066.a.png", "067.jpg|067.a.png", "068.jpg|068.a.png", "069.jpg|069.a.png", "070.jpg|070.a.png", "071.jpg|071.a.png", "072.jpg|072.a.png", "073.jpg|073.a.png", "074.jpg|074.a.png"]
+}
