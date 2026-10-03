@@ -5,7 +5,12 @@
 
 A Minecraft mod!
 
-To download the mod, visit the [Modrinth page](https://modrinth.com/mod/cobblelocke-cobblemon).
+<a href="https://ko-fi.com/matilabo"><img src="https://github.com/Matilabo/cobblelocke/blob/main/assets/icons/kofi-pixel.png" alt="Ko-fi" width="64"></a>
+&nbsp;
+<a href="https://modrinth.com/mod/cobblelocke-cobblemon"><img src="https://github.com/Matilabo/cobblelocke/blob/main/assets/icons/modrinth-pixel.png" alt="Modrinth" width="64"></a>
+&nbsp;
+<a href="https://www.curseforge.com/minecraft/mc-mods/cobblelocke"><img src="https://github.com/Matilabo/cobblelocke/blob/main/assets/icons/curseforge-pixel.png" alt="CurseForge" width="64"></a>
+
 
 To report an issue, check the [Issues tab](https://github.com/Matilabo/cobblelocke/issues).
 
