@@ -317,8 +317,7 @@ public class CobblelockeConfigScreen extends Screen {
 
     private void applyPreset(Preset preset) {
         CobblelockeConfig fromPreset = CobblelockeConfig.fromPreset(preset.name(), preset.rules());
-        fromPreset.configured = config.configured;
-        fromPreset.runActive = config.runActive;
+        fromPreset.keepServerSettings(config);
         config.copyFrom(fromPreset);
         rebuildRows();
         playClick();

@@ -107,6 +107,10 @@ public class PlayerState {
         cappedRegions.add(regionId);
     }
 
+    public void clearCappedRegions() {
+        cappedRegions.clear();
+    }
+
     public boolean hasSpawnInInstance(BiomeInstanceKey key) {
         return instanceSpawns.contains(key);
     }
@@ -195,7 +199,6 @@ public class PlayerState {
         biomeCaptures.clear();
         instanceCaptures.clear();
         instanceSpawns.clear();
-        cappedRegions.clear();
         lastCatchTime = 0L;
         startingBiome = null;
         eventBiomes.clear();

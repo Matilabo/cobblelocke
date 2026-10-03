@@ -20,6 +20,8 @@ public class CobblelockeConfig {
 
     public String serverConfigMode = "read-only";
 
+    public boolean spawnCapAlwaysOn = false;
+
     public boolean runActive = false;
 
     public String preset = "Custom";
@@ -172,7 +174,7 @@ public class CobblelockeConfig {
 
     public boolean capSpawningPerRegionMemory = false;
 
-    public boolean capSpawningPerRegionByPlayer = true;
+    public boolean capSpawningPerRegionByPlayer = false;
     public boolean noDuplicates = false;
     public boolean allowRepeatAfterFaint = false;
     public boolean noHealing = false;
@@ -457,6 +459,21 @@ public class CobblelockeConfig {
         CobblelockeConfig config = fromJsonObject(merged);
         config.preset = name;
         return config;
+    }
+
+    public void keepServerSettings(CobblelockeConfig from) {
+        if (from == null) {
+            return;
+        }
+        serverConfigMode = from.serverConfigMode;
+        spawnCapAlwaysOn = from.spawnCapAlwaysOn;
+        configured = from.configured;
+        runActive = from.runActive;
+    }
+
+    public String spawnCapSignature() {
+        return nuzlockeModeEnabled + "|" + capSpawningPerRegionChunks + "|" + capSpawningPerRegionCount + "|"
+                + capSpawningPerRegionMemory + "|" + capSpawningPerRegionByPlayer;
     }
 
     public CobblelockeConfig copy() {

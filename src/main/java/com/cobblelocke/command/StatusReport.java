@@ -53,6 +53,12 @@ public final class StatusReport {
             if (config.catchCooldownSeconds > 0) {
                 rules.add(config.catchCooldownSeconds + "s catch cooldown");
             }
+            if (config.capSpawningPerRegionChunks > 0) {
+                rules.add(config.capSpawningPerRegionCount + " spawn" + (config.capSpawningPerRegionCount == 1
+                        ? "" : "s") + " per " + config.capSpawningPerRegionChunks + " chunk region"
+                        + (config.capSpawningPerRegionByPlayer ? " per player" : "")
+                        + (config.spawnCapAlwaysOn ? " (always on)" : ""));
+            }
             line("Nuzlocke: §f" + join(rules, "on"));
         }
 

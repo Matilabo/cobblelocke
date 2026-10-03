@@ -55,6 +55,7 @@ public final class ConfigFiles {
             if (config.preset != null && !config.preset.isBlank() && !config.preset.equalsIgnoreCase("Custom")) {
                 CobblelockeConfig fromPreset = presetConfig(config.preset, loadPresets());
                 if (config.preset.equals(fromPreset.preset)) {
+                    fromPreset.keepServerSettings(config);
                     config = fromPreset;
                 }
             }
@@ -75,7 +76,8 @@ public final class ConfigFiles {
             Files.createDirectories(file.getParent());
             JsonObject values = config.toJsonObject();
             StringBuilder out = new StringBuilder();
-            out.append("// Cobblelocke rules for new worlds.\n");
+            out.append("// Cobblelocke rules for new worlds. These rules apply for all the players, when any "
+                    + "player saves the config it also saves for everyone else.\n");
             out.append("// Saving from the mc /cobblelocke config command rewrites this file.\n");
             out.append("// World-specific randomization pool tables are kept in each world's cobblelocke/ folder.\n");
             out.append("//\n");
@@ -103,6 +105,16 @@ public final class ConfigFiles {
             out.append("  // /cobblelocke reset @a\n");
             out.append("  \"serverConfigMode\": ").append(GSON.toJson(config.serverConfigMode))
                     .append(",\n");
+            out.append("  // Spawn cap timing (true or false).\n");
+            out.append("  // false: the Cap Spawning rules start working once a run has started on this server, "
+                    + "and keep\n");
+            out.append("  // working after the run is stopped or reset; only changing those rules or turning "
+                    + "them off changes them.\n");
+            out.append("  // true: they also work before any run has started.\n");
+            out.append("  // /cobblelocke spawncap on|off changes this from the game. off also turns the spawn "
+                    + "cap off until\n");
+            out.append("  // the next run starts, and forgets every region it remembered.\n");
+            out.append("  \"spawnCapAlwaysOn\": ").append(config.spawnCapAlwaysOn).append(",\n");
             out.append("  // The default preset that the mod uses, by default it's the settings below but if "
                     + "you change this it will load from presets.json5\n");
             out.append("  \"preset\": ").append(GSON.toJson(config.preset)).append(",\n");
@@ -362,7 +374,7 @@ public final class ConfigFiles {
         config.capSpawningPerRegionChunks = 0;
         config.capSpawningPerRegionCount = 1;
         config.capSpawningPerRegionMemory = false;
-        config.capSpawningPerRegionByPlayer = true;
+        config.capSpawningPerRegionByPlayer = false;
         config.noDuplicates = true;
         config.allowRepeatAfterFaint = true;
         config.noHealing = true;

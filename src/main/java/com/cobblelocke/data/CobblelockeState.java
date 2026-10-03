@@ -25,6 +25,10 @@ public class CobblelockeState extends PersistentState {
 
     private final java.util.Set<String> cappedRegions = new java.util.HashSet<>();
 
+    private boolean runEverStarted = false;
+
+    private String spawnCapSignature = null;
+
     private static final Type<CobblelockeState> TYPE = new Type<>(
             CobblelockeState::new, CobblelockeState::readNbt, DataFixTypes.LEVEL);
 
@@ -49,7 +53,44 @@ public class CobblelockeState extends PersistentState {
         if (reroll) {
             configGeneration++;
         }
+        if (config.runActive) {
+            runEverStarted = true;
+        }
+        refreshSpawnCapSignature();
         markDirty();
+    }
+
+    public boolean isSpawnCapActive() {
+        if (!config.nuzlockeModeEnabled || config.capSpawningPerRegionChunks <= 0) {
+            return false;
+        }
+        return config.spawnCapAlwaysOn || runEverStarted || config.runActive;
+    }
+
+    public boolean hasRunEverStarted() {
+        return runEverStarted;
+    }
+
+    public void turnSpawnCapOff() {
+        config.spawnCapAlwaysOn = false;
+        runEverStarted = false;
+        clearSpawnCapMemory();
+        markDirty();
+    }
+
+    public void clearSpawnCapMemory() {
+        cappedRegions.clear();
+        players.values().forEach(PlayerState::clearCappedRegions);
+        markDirty();
+    }
+
+    private void refreshSpawnCapSignature() {
+        String current = config.spawnCapSignature();
+        if (spawnCapSignature != null && !spawnCapSignature.equals(current)) {
+            clearSpawnCapMemory();
+            Cobblelocke.LOGGER.info("The spawn cap settings changed, so remembered regions were cleared");
+        }
+        spawnCapSignature = current;
     }
 
     public UUID getConfigOwner() {
@@ -139,7 +180,6 @@ public class CobblelockeState extends PersistentState {
 
     public void resetRun() {
         players.values().forEach(PlayerState::resetProgress);
-        cappedRegions.clear();
         markDirty();
     }
 
@@ -161,6 +201,10 @@ public class CobblelockeState extends PersistentState {
         net.minecraft.nbt.NbtList regions = new net.minecraft.nbt.NbtList();
         cappedRegions.forEach(region -> regions.add(net.minecraft.nbt.NbtString.of(region)));
         nbt.put("CappedRegions", regions);
+        nbt.putBoolean("RunEverStarted", runEverStarted);
+        if (spawnCapSignature != null) {
+            nbt.putString("SpawnCapSignature", spawnCapSignature);
+        }
         NbtCompound playersTag = new NbtCompound();
         players.forEach((id, state) -> playersTag.put(id.toString(), state.toNbt()));
         nbt.put("Players", playersTag);
@@ -181,6 +225,10 @@ public class CobblelockeState extends PersistentState {
         for (int i = 0; i < regions.size(); i++) {
             state.cappedRegions.add(regions.getString(i));
         }
+        state.runEverStarted = nbt.getBoolean("RunEverStarted") || state.config.runActive;
+        state.spawnCapSignature = nbt.contains("SpawnCapSignature")
+                ? nbt.getString("SpawnCapSignature")
+                : state.config.spawnCapSignature();
         NbtCompound playersTag = nbt.getCompound("Players");
         for (String key : playersTag.getKeys()) {
             try {

@@ -145,6 +145,8 @@ public final class ConfigOptions {
 
     private static final List<Integer> REGION_COUNTS = List.of(1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20);
 
+    private static final String CAP_STAYS = "This rule and the two other cap spawning rules stay active even after stopping the run, and only change when their value is updated or when turned off.";
+
     private static final List<Integer> REGION_CHUNKS = List.of(0, 1, 2, 4, 8, 16, 32);
     private static final List<String> REGION_CHUNK_LABELS =
             List.of("Off", "1 chunk", "2 chunks", "4 chunks", "8 chunks", "16 chunks", "32 chunks");
@@ -238,14 +240,17 @@ public final class ConfigOptions {
                 "Set a region size in chunks. Once the cap below is reached, further spawns there are stopped.",
                 "", REGION_CHUNKS, REGION_CHUNK_LABELS, "in chunks, 1 chunk is 16x16 blocks");
         slider("capSpawningPerRegionCount", "capSpawningPerRegionChunks", "Cap Spawning Per Region Count",
-                "How many wild Cobblemon may be alive at once inside one region.", "",
-                REGION_COUNTS, List.of());
+                "Set a number of Cobblemon, cap the number of Cobblemon that spawn in the region set "
+                        + "above. " + CAP_STAYS, "", REGION_COUNTS, List.of());
         toggle("capSpawningPerRegionMemory", "capSpawningPerRegionChunks", "Cap Spawning Per Region Memory",
                 "If a player leaves the region and the cobblemon despawn and the cap for that region was "
-                        + "reached, they don't respawn in that region ever again (per player)");
+                        + "reached, they don't respawn in that region ever again. " + CAP_STAYS
+                        + " You can also use /cobblelocke spawncap off to turn the spawn cap off.");
         toggle("capSpawningPerRegionByPlayer", "capSpawningPerRegionChunks", "Cap Spawning Per Region by Player",
-                "If true, all players share the count and memory of a region, per player restrictions of the "
-                        + "two previous rules are ignored");
+                "By default all players share the count and memory of a region in the previous two rules. "
+                        + "If true, the number of Cobblemon that spawn in the region and the region memory are "
+                        + "calculated by player, including the ones that join after this rule is turned on. "
+                        + CAP_STAYS);
         toggle("noDuplicates", "nuzlockeModeEnabled", "No Duplicates",
                 "No repeat species, and no other member of an evolution line you already caught.");
         toggle("allowRepeatAfterFaint", "noDuplicates", "Allow Repeat Species After Fainting",

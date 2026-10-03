@@ -68,6 +68,13 @@ public final class CobblelockeCommand {
                         .then(CommandManager.argument("players", EntityArgumentType.players())
                                 .executes(context -> resetRun(context.getSource(),
                                         EntityArgumentType.getPlayers(context, "players")))))
+                .then(CommandManager.literal("spawncap")
+                        .requires(source -> allowed(source, false))
+                        .executes(context -> showSpawnCap(context.getSource()))
+                        .then(CommandManager.literal("on")
+                                .executes(context -> setSpawnCap(context.getSource(), true)))
+                        .then(CommandManager.literal("off")
+                                .executes(context -> setSpawnCap(context.getSource(), false))))
                 .then(CommandManager.literal("export")
                         .requires(source -> allowed(source, false))
                         .then(CommandManager.argument("name", StringArgumentType.greedyString())
@@ -303,6 +310,67 @@ public final class CobblelockeCommand {
         return names.size();
     }
 
+    private static int setSpawnCap(ServerCommandSource source, boolean on) {
+        ServerPlayerEntity player = source.getPlayer();
+        CobblelockeState state = Cobblelocke.state();
+        if (state == null) {
+            return 0;
+        }
+        if (player != null && !state.canUseCommand(player, false)) {
+            source.sendError(Text.literal(DENIED));
+            return 0;
+        }
+        if (on) {
+            CobblelockeConfig config = state.getConfig().copy();
+            config.spawnCapAlwaysOn = true;
+            state.saveConfig(config, false);
+        } else {
+            state.turnSpawnCapOff();
+        }
+        ConfigFiles.writeConfig(state.getConfig(), StatusReport.asksOnFirstJoin());
+
+        CobblelockeConfig config = state.getConfig();
+        String message;
+        if (on) {
+            message = config.nuzlockeModeEnabled && config.capSpawningPerRegionChunks > 0
+                    ? "§aSpawn cap on. §7The Cap Spawning rules now apply even before a run starts."
+                    : "§aSpawn cap on. §7It takes effect once Nuzlocke Mode is on and Cap Spawning Per "
+                            + "Region by Size is set.";
+        } else {
+            message = "§eSpawn cap off. §7It stays off until the next run starts, and every remembered "
+                    + "region was forgotten.";
+        }
+        source.sendFeedback(() -> Text.literal(message), true);
+        return 1;
+    }
+
+    private static int showSpawnCap(ServerCommandSource source) {
+        CobblelockeState state = Cobblelocke.state();
+        if (state == null) {
+            return 0;
+        }
+        CobblelockeConfig config = state.getConfig();
+        String status = state.isSpawnCapActive() ? "§aactive" : "§7not active";
+        String why;
+        if (!config.nuzlockeModeEnabled || config.capSpawningPerRegionChunks <= 0) {
+            why = "Nuzlocke Mode and Cap Spawning Per Region by Size must both be on.";
+        } else if (config.spawnCapAlwaysOn) {
+            why = "spawnCapAlwaysOn is on, so it applies even before a run.";
+        } else if (state.hasRunEverStarted() || config.runActive) {
+            why = "a run has started on this world, so it stays on through stops and resets.";
+        } else {
+            why = "no run has started yet. Use /cobblelocke spawncap on to apply it now.";
+        }
+        source.sendFeedback(() -> Text.literal("§7Spawn cap: " + status + "§7, " + why), false);
+        if (config.capSpawningPerRegionChunks > 0) {
+            source.sendFeedback(() -> Text.literal("§7  " + config.capSpawningPerRegionCount
+                    + " per " + config.capSpawningPerRegionChunks + " chunk region, "
+                    + (config.capSpawningPerRegionByPlayer ? "counted per player" : "shared by everyone")
+                    + (config.capSpawningPerRegionMemory ? ", with memory" : "")), false);
+        }
+        return 1;
+    }
+
     private static int exportPreset(ServerCommandSource source, String name) {
         ServerPlayerEntity player = source.getPlayer();
         CobblelockeState state = Cobblelocke.state();
@@ -420,7 +488,7 @@ public final class CobblelockeCommand {
         if (player != null) {
             PlayerState playerState = state.getPlayer(player.getUuid());
             source.sendFeedback(() -> Text.literal("§7Starter chosen: "
-                    + (playerState.hasChosenStarter() ? "§ayes" : "§cno §7(nuzlocke rules dormant)")), false);
+                    + (playerState.hasChosenStarter() ? "§ayes" : "§cno")), false);
             if (config.firstCatchEventLocked) {
                 source.sendFeedback(() -> Text.literal("§7Event lock: "
                         + (playerState.hasLeftStartingBiome()
