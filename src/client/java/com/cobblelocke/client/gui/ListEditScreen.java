@@ -52,15 +52,16 @@ public class ListEditScreen extends Screen {
         context.fill(left, top + 20, left + panelW, top + 22, Theme.ACCENT);
         context.drawText(textRenderer, title, left + 10, top + 7, Theme.TEXT, false);
         int y = top + 30;
-        for (var line : textRenderer.wrapLines(Text.literal(description + " Separate ids with commas."), panelW - 20)) {
+        for (var line : textRenderer.wrapLines(Text.literal(description + " "
+                + Tr.get("ui.list.separate", "Separate ids with commas.")), panelW - 20)) {
             context.drawText(textRenderer, line, left + 10, y, Theme.TEXT_MUTED, false);
             y += 10;
         }
         field.render(context, mouseX, mouseY, delta);
         int center = width / 2;
-        Theme.button(context, textRenderer, "Done", center - 84, buttonY(), 80, 18, true,
+        Theme.button(context, textRenderer, Tr.get("ui.done", "Done"), center - 84, buttonY(), 80, 18, true,
                 Theme.inside(mouseX, mouseY, center - 84, buttonY(), 80, 18), true);
-        Theme.button(context, textRenderer, "Cancel", center + 4, buttonY(), 80, 18, false,
+        Theme.button(context, textRenderer, Tr.get("ui.cancel", "Cancel"), center + 4, buttonY(), 80, 18, false,
                 Theme.inside(mouseX, mouseY, center + 4, buttonY(), 80, 18), true);
     }
 

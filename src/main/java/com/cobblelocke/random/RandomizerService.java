@@ -1,5 +1,7 @@
 package com.cobblelocke.random;
 
+import net.minecraft.util.Formatting;
+import com.cobblelocke.util.Lang;
 import com.cobblelocke.Cobblelocke;
 import com.cobblelocke.config.CobblelockeConfig;
 import com.cobblelocke.data.CobblelockeState;
@@ -181,6 +183,7 @@ public final class RandomizerService {
         if (config.wild(config.randomWildCaptures)) {
             Species replacement = SpeciesPool.rollWild(new Random(), config);
             String original = pokemon.getSpecies().getName();
+            Species originalSpecies = pokemon.getSpecies();
             if (replacement != null && !replacement.getName().equals(original)) {
                 MinecraftServer server = Cobblelocke.getServer();
                 Runnable transform = () -> {
@@ -191,8 +194,10 @@ public final class RandomizerService {
                         PokemonStamper.stamp(pokemon, config, state.getConfigGeneration(),
                                 PokemonStamper.Context.WILD);
                         pokemon.heal();
-                        player.sendMessage(Text.literal("§d★ " + original + " transformed into §b"
-                                + replacement.getName() + "§d!"));
+                        state.getPlayer(player.getUuid()).retargetCatch(pokemon.getUuid(), replacement.getName());
+                        state.markDirty();
+                        player.sendMessage(Lang.tr("random.transformed", "§d★ %1$s transformed into %2$s§d!",
+                                Lang.species(originalSpecies), Lang.hl(Lang.species(replacement), Formatting.AQUA)));
                     } catch (Exception e) {
                         Cobblelocke.LOGGER.warn("Could not transform a captured Pokemon: {}", e.toString());
                     }
@@ -224,6 +229,7 @@ public final class RandomizerService {
         MinecraftServer server = Cobblelocke.getServer();
         UUID ownerId = pokemon.getOwnerUUID();
         String before = pokemon.getSpecies().getName();
+        Species beforeSpecies = pokemon.getSpecies();
 
         Runnable apply = () -> {
             try {
@@ -234,8 +240,9 @@ public final class RandomizerService {
                         if (ownerId != null && server != null) {
                             ServerPlayerEntity player = server.getPlayerManager().getPlayer(ownerId);
                             if (player != null) {
-                                player.sendMessage(Text.literal("§d★ " + before + " evolved into §b"
-                                        + replacement.getName() + "§d!"));
+                                player.sendMessage(Lang.tr("random.evolved", "§d★ %1$s evolved into %2$s§d!",
+                                        Lang.species(beforeSpecies),
+                                        Lang.hl(Lang.species(replacement), Formatting.AQUA)));
                             }
                         }
                     }
@@ -302,7 +309,7 @@ public final class RandomizerService {
             NicknameService.requestAfterCapture(player, starter);
         }
 
-        player.sendMessage(Text.literal("§d★ Your Cobblelocke run has begun."));
+        player.sendMessage(Lang.tr("random.run_begun", "§d★ Your Cobblelocke run has begun."));
     }
 
     private static void applyStarterGimmicks(Pokemon starter, CobblelockeConfig config) {

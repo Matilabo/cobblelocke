@@ -9,6 +9,7 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.Locale;
 
 public class ExportPresetScreen extends Screen {
@@ -20,14 +21,17 @@ public class ExportPresetScreen extends Screen {
     private final Screen parent;
     private final String configJson;
     private final List<String> existingNames;
+    private final Consumer<String> onExported;
 
     private TextFieldWidget field;
 
-    public ExportPresetScreen(Screen parent, String configJson, List<String> existingNames) {
+    public ExportPresetScreen(Screen parent, String configJson, List<String> existingNames,
+                              Consumer<String> onExported) {
         super(Text.literal("Export Preset"));
         this.parent = parent;
         this.configJson = configJson;
         this.existingNames = existingNames;
+        this.onExported = onExported;
     }
 
     @Override
@@ -83,25 +87,33 @@ public class ExportPresetScreen extends Screen {
         context.fill(left, top, left + PANEL_W, top + 22, Theme.MAIN);
         context.fill(left, top + 20, left + PANEL_W, top + 22, Theme.ACCENT);
 
-        String header = "Export these settings as a preset";
+        String header = Tr.get("ui.export.header", "Export these settings as a preset");
         context.drawText(textRenderer, header, (width - textRenderer.getWidth(header)) / 2, top + 7,
                 Theme.TEXT, false);
 
-        String prompt = "Name your preset! It is written to presets.json5 and";
-        String prompt2 = "appears in the preset switcher at the top.";
-        context.drawText(textRenderer, prompt, left + 14, top + 30, Theme.TEXT_MUTED, false);
-        context.drawText(textRenderer, prompt2, left + 14, top + 40, Theme.TEXT_MUTED, false);
+        String prompt = Tr.get("ui.export.prompt", "Name your preset! It is written to presets.json5 and "
+                + "appears in the preset switcher at the top.");
+        int promptY = top + 30;
+        for (var line : textRenderer.wrapLines(Text.literal(prompt), PANEL_W - 28)) {
+            context.drawText(textRenderer, line, left + 14, promptY, Theme.TEXT_MUTED, false);
+            promptY += 10;
+        }
 
         field.render(context, mouseX, mouseY, delta);
 
         String note = overwrites()
-                ? "§eA preset called " + name() + " already exists and will be replaced."
-                : "§7You can replace an existing preset by giving it the same name.";
-        context.drawText(textRenderer, note, left + 14, top + 82, Theme.TEXT_MUTED, false);
+                ? "§e" + Tr.get("ui.export.overwrite", "A preset called %s already exists and will be replaced.", name())
+                : "§7" + Tr.get("ui.export.tip", "You can replace an existing preset by giving it the same name.");
+        int noteY = top + 80;
+        for (var line : textRenderer.wrapLines(Text.literal(note), PANEL_W - 28)) {
+            context.drawText(textRenderer, line, left + 14, noteY, Theme.TEXT_MUTED, false);
+            noteY += 10;
+        }
 
-        Theme.button(context, textRenderer, "Cancel", cancelX(), buttonY(), BUTTON_W, BUTTON_H, false,
+        Theme.button(context, textRenderer, Tr.get("ui.cancel", "Cancel"), cancelX(), buttonY(), BUTTON_W, BUTTON_H, false,
                 Theme.inside(mouseX, mouseY, cancelX(), buttonY(), BUTTON_W, BUTTON_H), true);
-        Theme.button(context, textRenderer, overwrites() ? "Replace" : "Export", confirmX(), buttonY(),
+        Theme.button(context, textRenderer, overwrites() ? Tr.get("ui.replace", "Replace") : Tr.get("ui.export", "Export"),
+                confirmX(), buttonY(),
                 BUTTON_W, BUTTON_H, true,
                 Theme.inside(mouseX, mouseY, confirmX(), buttonY(), BUTTON_W, BUTTON_H), canConfirm());
     }
@@ -137,6 +149,7 @@ public class ExportPresetScreen extends Screen {
             return;
         }
         ClientPlayNetworking.send(new ExportPresetPayload(name(), configJson));
+        onExported.accept(name());
         back();
     }
 

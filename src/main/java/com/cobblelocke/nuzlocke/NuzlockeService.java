@@ -37,7 +37,10 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import com.cobblelocke.util.Lang;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -110,12 +113,12 @@ public final class NuzlockeService {
                 ? world
                 : player.getServerWorld();
 
-        String refusal = catchRefusal(player, target, targetEntity, targetWorld, targetPos);
+        MutableText refusal = catchRefusal(player, target, targetEntity, targetWorld, targetPos);
         if (refusal != null) {
             unwindBattleCapture(event);
             event.cancel();
             resyncInventory(player);
-            player.sendMessage(Text.literal(refusal));
+            player.sendMessage(refusal);
             return;
         }
 
@@ -126,19 +129,25 @@ public final class NuzlockeService {
 
         RegistryKey<Biome> biome = Worlds.biomeAt(targetWorld, targetPos);
         PlayerState reserving = state.getPlayer(player.getUuid());
+        CobblelockeConfig config = state.getConfig();
+        boolean shinyPass = config.shinyClause && target.getShiny();
+        Claim claim = shinyPass ? new Claim(null, null) : claim(config, reserving,
+                EventLockService.catchBiome(reserving, targetEntity, Worlds.biomeId(biome)),
+                biome == null ? null : BiomeInstanceKey.fromPosition(biome, targetPos, config.oneCatchPerRegion),
+                EventLockService.triggerBiome(reserving, targetEntity) != null,
+                EventLockService.isExtraCatch(config, reserving, targetEntity),
+                CatchReservations.activeFor(player.getUuid(), target.getUuid()));
         CatchReservations.reserve(new CatchReservations.Reservation(
                 player.getUuid(),
                 target.getUuid(),
-                EventLockService.catchBiome(reserving, targetEntity, Worlds.biomeId(biome)),
-                biome == null ? null
-                        : BiomeInstanceKey.fromPosition(biome, targetPos,
-                                state.getConfig().oneCatchPerRegion),
+                claim.biomeId(),
+                claim.region(),
                 EvolutionLine.of(target.getSpecies()),
-                state.getConfig().shinyClause && target.getShiny(),
+                shinyPass,
                 System.currentTimeMillis()), event.getPokeBall());
     }
 
-    public static String catchRefusal(ServerPlayerEntity player, Pokemon target, PokemonEntity targetEntity,
+    public static MutableText catchRefusal(ServerPlayerEntity player, Pokemon target, PokemonEntity targetEntity,
                                       ServerWorld targetWorld, BlockPos targetPos) {
         CobblelockeState state = Cobblelocke.state();
         if (state == null) {
@@ -155,8 +164,10 @@ public final class NuzlockeService {
         RegistryKey<Biome> biome = Worlds.biomeAt(world, pos);
 
         String biomeId = EventLockService.catchBiome(playerState, targetEntity, Worlds.biomeId(biome));
+        boolean extraCatch = EventLockService.isExtraCatch(config, playerState, targetEntity);
 
-        String eventRefusal = EventLockService.catchRefusal(player, playerState, config, biomeId, targetEntity);
+        MutableText eventRefusal = EventLockService.catchRefusal(player, playerState, config,
+                EventLockService.targetArea(playerState, targetEntity, world, pos, config), targetEntity);
         if (eventRefusal != null) {
             return eventRefusal;
         }
@@ -170,7 +181,7 @@ public final class NuzlockeService {
         }
 
         if (config.onlyCatchInBattle && targetEntity != null && !targetEntity.isBattling()) {
-            return "§cYou can only catch Pokémon you are battling. (Only Catch In-Battle)";
+            return Lang.tr("catch.only_in_battle", "§cYou can only catch Pokémon you are battling. (Only Catch In-Battle)");
         }
 
         UUID targetId = target == null ? null : target.getUuid();
@@ -182,10 +193,10 @@ public final class NuzlockeService {
         if (config.catchCooldownSeconds > 0) {
             if (playerState.isOnCatchCooldown(config.catchCooldownSeconds)) {
                 long remaining = playerState.remainingCooldownMillis(config.catchCooldownSeconds);
-                return "§cCatch cooldown active. Wait " + Worlds.formatDuration(remaining) + ".";
+                return Lang.tr("catch.cooldown", "§cCatch cooldown active. Wait %s.", Worlds.formatDuration(remaining));
             }
             if (!inProgress.isEmpty()) {
-                return "§cFinish your current catch first. (Catch Cooldown)";
+                return Lang.tr("catch.cooldown_in_progress", "§cFinish your current catch first. (Catch Cooldown)");
             }
         }
 
@@ -194,42 +205,102 @@ public final class NuzlockeService {
             if (caught != null) {
                 String species = target.getSpecies().getName();
                 return caught.equals(species)
-                        ? "§cYou already caught a " + species + "! (Duplicate Clause)"
-                        : "§cYou already caught " + caught + ", same evolution line! (Duplicate Clause)";
+                        ? Lang.tr("catch.duplicate_species", "§cYou already caught a %s! (Duplicate Clause)",
+                                Lang.species(target.getSpecies()))
+                        : Lang.tr("catch.duplicate_line", "§cYou already caught %s, same evolution line! (Duplicate Clause)",
+                                Lang.species(com.cobblemon.mod.common.api.pokemon.PokemonSpecies.getByName(
+                                        caught.toLowerCase(java.util.Locale.ROOT))));
             }
             Set<String> line = EvolutionLine.of(target.getSpecies());
             for (CatchReservations.Reservation reservation : inProgress) {
                 if (reservation.evolutionLine().stream().anyMatch(line::contains)) {
-                    return "§cYou are already catching a Pokémon from that evolution line! (Duplicate Clause)";
+                    return Lang.tr("catch.duplicate_in_progress",
+                            "§cYou are already catching a Pokémon from that evolution line! (Duplicate Clause)");
                 }
             }
         }
 
-        if (config.oneCatchPerBiome && biomeId != null) {
+        BiomeInstanceKey regionKey = config.oneCatchPerRegion > 0 && biome != null
+                ? BiomeInstanceKey.fromPosition(biome, pos, config.oneCatchPerRegion) : null;
+        if (!extraCatch && config.oneCatchPerBiome && biomeId != null && regionKey != null) {
+            if (!biomeTaken(playerState, biomeId, inProgress) || !regionTaken(playerState, regionKey, inProgress)) {
+                return null;
+            }
+            String coords = "(" + regionKey.regionX() + ", " + regionKey.regionZ() + ")";
+            if (playerState.hasCapturedInBiome(biomeId) && playerState.hasCapturedInInstance(regionKey)) {
+                return Lang.tr("catch.biome_and_region_used",
+                        "§cYou already used both the %1$s§c catch and its region §f%2$s§c catch!",
+                        Lang.hl(Lang.biome(biomeId), Formatting.YELLOW), coords);
+            }
+            return Lang.tr("catch.region_in_progress",
+                    "§cYou are already catching a Pokémon in the %1$s§c region §f%2$s§c!",
+                    Lang.hl(Lang.biome(biomeId), Formatting.YELLOW), coords);
+        }
+
+        if (config.oneCatchPerBiome && biomeId != null && !extraCatch) {
             if (playerState.hasCapturedInBiome(biomeId)) {
-                return "§cYou already caught a Pokémon in §e" + Worlds.prettyBiomeName(biome) + "§c!";
+                return Lang.tr("catch.biome_used", "§cYou already caught a Pokémon in %s§c!",
+                        Lang.hl(Lang.biome(biomeId), Formatting.YELLOW));
             }
             for (CatchReservations.Reservation reservation : inProgress) {
                 if (biomeId.equals(reservation.biomeId())) {
-                    return "§cYou are already catching a Pokémon in §e" + Worlds.prettyBiomeName(biome) + "§c!";
+                    return Lang.tr("catch.biome_in_progress", "§cYou are already catching a Pokémon in %s§c!",
+                            Lang.hl(Lang.biome(biomeId), Formatting.YELLOW));
                 }
             }
         }
 
-        if (config.oneCatchPerRegion > 0 && biome != null) {
+        if (config.oneCatchPerRegion > 0 && biome != null && !extraCatch) {
             BiomeInstanceKey key = BiomeInstanceKey.fromPosition(biome, pos, config.oneCatchPerRegion);
-            String region = "§e" + Worlds.prettyBiomeName(biome) + "§c region §f(" + key.regionX()
-                    + ", " + key.regionZ() + ")§c";
+            MutableText regionBiome = Lang.hl(Lang.biome(biome), Formatting.YELLOW);
+            String coords = "(" + key.regionX() + ", " + key.regionZ() + ")";
             if (playerState.hasCapturedInInstance(key)) {
-                return "§cYou already caught a Pokémon in " + region + "!";
+                return Lang.tr("catch.region_used", "§cYou already caught a Pokémon in the %1$s§c region §f%2$s§c!",
+                        regionBiome, coords);
             }
             for (CatchReservations.Reservation reservation : inProgress) {
                 if (key.equals(reservation.instance())) {
-                    return "§cYou are already catching a Pokémon in " + region + "!";
+                    return Lang.tr("catch.region_in_progress",
+                            "§cYou are already catching a Pokémon in the %1$s§c region §f%2$s§c!", regionBiome, coords);
                 }
             }
         }
         return null;
+    }
+
+    // What a catch uses up. With One Catch Per Biome and One Catch Per Region both on, a normal catch
+    // takes the region's catch first and the biome's extra catch after it; an event encounter is
+    // either an extra catch (nothing) or takes both.
+    private record Claim(String biomeId, BiomeInstanceKey region) {
+    }
+
+    private static Claim claim(CobblelockeConfig config, PlayerState playerState, String biomeId,
+                               BiomeInstanceKey region, boolean eventCatch, boolean extraCatch,
+                               List<CatchReservations.Reservation> inProgress) {
+        String biomeClaim = config.oneCatchPerBiome ? biomeId : null;
+        BiomeInstanceKey regionClaim = config.oneCatchPerRegion > 0 ? region : null;
+        if (extraCatch) {
+            return new Claim(null, null);
+        }
+        if (eventCatch || biomeClaim == null || regionClaim == null) {
+            return new Claim(biomeClaim, regionClaim);
+        }
+        if (!regionTaken(playerState, regionClaim, inProgress)) {
+            return new Claim(null, regionClaim);
+        }
+        return new Claim(biomeClaim, null);
+    }
+
+    private static boolean biomeTaken(PlayerState playerState, String biomeId,
+                                      List<CatchReservations.Reservation> inProgress) {
+        return playerState.hasCapturedInBiome(biomeId)
+                || inProgress.stream().anyMatch(reservation -> biomeId.equals(reservation.biomeId()));
+    }
+
+    private static boolean regionTaken(PlayerState playerState, BiomeInstanceKey region,
+                                       List<CatchReservations.Reservation> inProgress) {
+        return playerState.hasCapturedInInstance(region)
+                || inProgress.stream().anyMatch(reservation -> region.equals(reservation.instance()));
     }
 
     private static String alreadyCaughtInLine(PlayerState playerState, Pokemon pokemon) {
@@ -255,10 +326,11 @@ public final class NuzlockeService {
         if (!config.runActive) {
             return;
         }
-        EventLockService.onPokemonCaptured(player, pokemon);
+        boolean eventCatch = EventLockService.onPokemonCaptured(player, pokemon);
         if (!config.nuzlockeModeEnabled) {
             return;
         }
+        boolean extraCatch = eventCatch && config.firstCatchEventLocked && config.isExtraCatch;
         PlayerState playerState = state.getPlayer(player.getUuid());
         if (config.requireNicknames) {
             NicknameService.requestAfterCapture(player, pokemon);
@@ -268,8 +340,8 @@ public final class NuzlockeService {
         boolean shinyPass = config.shinyClause && pokemon.getShiny();
 
         if (shinyPass) {
-            player.sendMessage(Text.literal("§6★ Shiny " + speciesName
-                    + " caught! §7(Shiny Clause - bypasses restrictions)"));
+            player.sendMessage(Lang.tr("capture.shiny", "§6★ Shiny %s caught! §7(Shiny Clause - bypasses restrictions)",
+                    Lang.species(pokemon.getSpecies())));
         }
 
         if (config.noDuplicates) {
@@ -285,26 +357,33 @@ public final class NuzlockeService {
         BlockPos ballPos = event.getPokeBallEntity() != null
                 ? event.getPokeBallEntity().getBlockPos()
                 : player.getBlockPos();
-        String biomeId = reservation != null ? reservation.biomeId() : null;
-        BiomeInstanceKey instance = reservation != null ? reservation.instance() : null;
-        if (biomeId == null) {
+        String biomeId;
+        BiomeInstanceKey instance;
+        if (reservation != null) {
+            biomeId = reservation.biomeId();
+            instance = reservation.instance();
+        } else {
             RegistryKey<Biome> fallback = Worlds.biomeAt(player.getServerWorld(), ballPos);
-            biomeId = Worlds.biomeId(fallback);
-            instance = fallback == null ? null
-                    : BiomeInstanceKey.fromPosition(fallback, ballPos, config.oneCatchPerRegion);
+            Claim claim = claim(config, playerState, Worlds.biomeId(fallback), fallback == null ? null
+                            : BiomeInstanceKey.fromPosition(fallback, ballPos, config.oneCatchPerRegion),
+                    eventCatch, extraCatch, List.of());
+            biomeId = claim.biomeId();
+            instance = claim.region();
         }
 
-        if (config.oneCatchPerBiome && biomeId != null) {
+        if (config.oneCatchPerBiome && biomeId != null && !extraCatch) {
             playerState.recordBiomeCapture(biomeId);
-            player.sendMessage(Text.literal("§aCaptured §e" + speciesName + "§a in §e"
-                    + Worlds.prettyBiomeName(biomeId) + "§a. No more catches here."));
+            playerState.recordCatch(PlayerState.biomeRecord(biomeId), speciesName, pokemon.getUuid());
+            player.sendMessage(Lang.tr("capture.biome", "§aCaptured %1$s§a in %2$s§a. No more catches here.",
+                    Lang.hl(Lang.species(pokemon.getSpecies()), Formatting.YELLOW), Lang.hl(Lang.biome(biomeId), Formatting.YELLOW)));
         }
 
-        if (config.oneCatchPerRegion > 0 && instance != null) {
+        if (config.oneCatchPerRegion > 0 && instance != null && !extraCatch) {
             playerState.recordInstanceCapture(instance);
-            player.sendMessage(Text.literal("§aCaptured §e" + speciesName + "§a in §e"
-                    + Worlds.prettyBiomeName(instance.biomeKey()) + "§a region §f(" + instance.regionX()
-                    + ", " + instance.regionZ() + ")§a."));
+            playerState.recordCatch(PlayerState.regionRecord(instance), speciesName, pokemon.getUuid());
+            player.sendMessage(Lang.tr("capture.region", "§aCaptured %1$s§a in the %2$s§a region §f%3$s§a.",
+                    Lang.hl(Lang.species(pokemon.getSpecies()), Formatting.YELLOW), Lang.hl(Lang.biome(instance.biomeKey()), Formatting.YELLOW),
+                    "(" + instance.regionX() + ", " + instance.regionZ() + ")"));
         }
 
         if (config.catchCooldownSeconds > 0) {
@@ -454,16 +533,16 @@ public final class NuzlockeService {
         }
         PlayerState playerState = state.getPlayer(ownerId);
 
-        String name = displayName(pokemon);
+        MutableText name = Lang.pokemon(pokemon);
 
         if (config.noHealing && config.dropHeldItemsOnFaint && dropHeldItem(player, pokemon)) {
-            player.sendMessage(Text.literal("§7" + name + " dropped what it was holding."));
+            player.sendMessage(Lang.tr("faint.dropped", "§7%s dropped what it was holding.", name));
         }
 
         if (!inBattle && !config.enableTerrainDeaths) {
             if (config.noHealing || config.releaseFainted) {
-                player.sendMessage(Text.literal("§7" + name
-                        + " fainted outside battle and can still be revived. (Terrain deaths are off)"));
+                player.sendMessage(Lang.tr("faint.terrain_off",
+                        "§7%s fainted outside battle and can still be revived. (Terrain deaths are off)", name));
             }
             return;
         }
@@ -476,11 +555,11 @@ public final class NuzlockeService {
             playerState.markPokemonDead(pokemon.getUuid());
             state.markDirty();
             died = true;
-            player.sendMessage(Text.literal("§4" + name + " has fallen and cannot be revived! (Permadeath)"));
+            player.sendMessage(Lang.tr("faint.permadeath", "§4%s has fallen and cannot be revived! (Permadeath)", name));
 
             if (config.releaseFainted) {
                 releaseFainted(player, pokemon);
-                player.sendMessage(Text.literal("§c" + name + " has fainted and been released! (Nuzlocke)"));
+                player.sendMessage(Lang.tr("faint.released", "§c%s has fainted and been released! (Nuzlocke)", name));
             }
         }
 
@@ -508,8 +587,8 @@ public final class NuzlockeService {
             }
         }
         line.forEach(playerState::forgetSpecies);
-        player.sendMessage(Text.literal("§7The " + fallen.getSpecies().getName()
-                + " line can be caught again. (Repeat after fainting)"));
+        player.sendMessage(Lang.tr("faint.line_free", "§7The %s line can be caught again. (Repeat after fainting)",
+                Lang.species(fallen.getSpecies())));
     }
 
     private static boolean releaseFainted(ServerPlayerEntity player, Pokemon pokemon) {
@@ -576,8 +655,8 @@ public final class NuzlockeService {
         MinecraftServer server = Cobblelocke.getServer();
         ServerPlayerEntity player = server == null ? null : server.getPlayerManager().getPlayer(ownerId);
         if (player != null) {
-            player.sendMessage(Text.literal("§c" + displayName(pokemon)
-                    + " cannot be healed - they have fallen! (Permadeath)"));
+            player.sendMessage(Lang.tr("faint.no_heal", "§c%s cannot be healed, they have fallen! (Permadeath)",
+                    Lang.pokemon(pokemon)));
         }
     }
 

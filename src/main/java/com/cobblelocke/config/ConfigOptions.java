@@ -230,9 +230,10 @@ public final class ConfigOptions {
         tab(Tab.NUZLOCKE);
         heading("Nuzlocke Settings");
         toggle("nuzlockeModeEnabled", null, "Nuzlocke Mode",
-                "Enable the Nuzlocke mode. It begins once you have chosen a starter.");
+                "Enable the Nuzlocke mode. Its rules apply to every player as soon as a run starts.");
         toggle("oneCatchPerBiome", "nuzlockeModeEnabled", "One Catch Per Biome",
-                "Only one catch per biome, anywhere in the world.");
+                "Only one catch per biome, anywhere in the world. With One Catch Per Region also on, this is "
+                        + "an extra catch per biome on top of each region's catch.");
         slider("oneCatchPerRegion", "nuzlockeModeEnabled", "One Catch Per Region",
                 "The world is cut into block regions, the recomended is 512x512 blocks, one catch per "
                         + "region.", "", REGION_SIZES, REGION_SIZE_LABELS, "");
@@ -285,6 +286,12 @@ public final class ConfigOptions {
                 "Entering a new biome and staying 5 seconds plays an animation and forces a battle with a "
                         + "randomized Cobblemon. That Cobblemon is the biome's first catch, and catching stays "
                         + "locked until you leave the biome you started in.");
+        toggle("isExtraCatch", "firstCatchEventLocked", "The Event Lock Catch Counts As Extra Catch",
+                "The Event Lock catch doesn't count for the One Catch Per Biome or One Catch Per Region rules. "
+                        + "When off, it uses up both the biome's and the region's catch.");
+        slider("eventLockRegion", "firstCatchEventLocked", "Event Lock Region",
+                "The Event Lock is triggered when entering a set region instead of a biome, the recommended "
+                        + "is 512x512 blocks.", "", REGION_SIZES, REGION_SIZE_LABELS, "");
         choice("eventLevelMode", "firstCatchEventLocked", "Event Cobblemon Level", LEVEL_MODE_HELP,
                 "", LEVEL_MODE_LABELS);
         option("animationPreset", "firstCatchEventLocked", "Encounter Animation Preset",

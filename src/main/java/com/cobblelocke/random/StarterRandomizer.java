@@ -48,7 +48,8 @@ public final class StarterRandomizer {
         for (int categoryIndex = 0; categoryIndex < trios; categoryIndex++) {
             int count = TRIO_TYPES.length;
 
-            Random random = seedFor(player.getUuid(), state.getConfigGeneration(), categoryIndex);
+            Random random = seedFor(player.getUuid(), state.getConfigGeneration(),
+                    state.getPlayer(player.getUuid()).getStarterRoll(), categoryIndex);
             List<PokemonProperties> picks = new ArrayList<>();
             Set<String> used = new HashSet<>();
 
@@ -158,7 +159,7 @@ public final class StarterRandomizer {
         }
     }
 
-    private static Random seedFor(UUID playerId, int generation, int categoryIndex) {
+    private static Random seedFor(UUID playerId, int generation, int roll, int categoryIndex) {
         long worldSeed = 0L;
         try {
             if (Cobblelocke.getServer() != null) {
@@ -170,6 +171,7 @@ public final class StarterRandomizer {
                 + playerId.hashCode() * 31L
                 + generation * 7919L
                 + categoryIndex * 104729L
+                + roll * 1299709L
                 + SALT);
     }
 }

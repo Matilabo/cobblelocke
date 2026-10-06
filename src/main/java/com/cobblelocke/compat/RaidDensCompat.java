@@ -1,5 +1,7 @@
 package com.cobblelocke.compat;
 
+import net.minecraft.util.Formatting;
+import com.cobblelocke.util.Lang;
 import com.cobblelocke.Cobblelocke;
 import com.cobblelocke.config.CobblelockeConfig;
 import com.cobblemon.mod.common.api.Priority;
@@ -40,7 +42,7 @@ public final class RaidDensCompat {
         try {
             Method getPlayer = event.getClass().getMethod("getPlayer");
             if (getPlayer.invoke(event) instanceof ServerPlayerEntity player) {
-                player.sendMessage(Text.literal("§cRaid Pokémon cannot be caught in this run. "
+                player.sendMessage(Lang.tr("raid.no_catch", "§cRaid Pokémon cannot be caught in this run. "
                         + "(Disable Raid Cobblemon Catch)"));
             }
         } catch (Exception ignored) {

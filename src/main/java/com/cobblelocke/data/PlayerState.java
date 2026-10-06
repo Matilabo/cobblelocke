@@ -12,6 +12,14 @@ import java.util.Set;
 import java.util.UUID;
 
 public class PlayerState {
+    public static final String ESCAPED = "!escaped";
+
+    public record CatchRecord(String species, UUID pokemonId) {
+        public boolean escaped() {
+            return ESCAPED.equals(species);
+        }
+    }
+
     private final UUID playerId;
 
     private boolean hasChosenStarter = false;
@@ -35,9 +43,19 @@ public class PlayerState {
 
     private boolean leftStartingBiome = false;
 
+    private boolean catchHints = true;
+
     private final Map<String, UUID> pendingEvents = new HashMap<>();
 
     private final Set<UUID> pendingNicknames = new HashSet<>();
+
+    private final Map<String, CatchRecord> catchRecords = new HashMap<>();
+
+    // Survive resets on purpose: the roll keeps each re-offered starter choice different, and the
+    // pending flag reopens the choice for a player who was offline when they were reset.
+    private int starterRoll = 0;
+
+    private boolean starterChoicePending = false;
 
     public PlayerState(UUID playerId) {
         this.playerId = playerId;
@@ -159,6 +177,14 @@ public class PlayerState {
         return leftStartingBiome;
     }
 
+    public boolean wantsCatchHints() {
+        return catchHints;
+    }
+
+    public void setCatchHints(boolean wanted) {
+        this.catchHints = wanted;
+    }
+
     public void setLeftStartingBiome(boolean left) {
         this.leftStartingBiome = left;
     }
@@ -191,6 +217,51 @@ public class PlayerState {
         pendingNicknames.remove(pokemonId);
     }
 
+    public int getStarterRoll() {
+        return starterRoll;
+    }
+
+    public void bumpStarterRoll() {
+        starterRoll++;
+    }
+
+    public boolean isStarterChoicePending() {
+        return starterChoicePending;
+    }
+
+    public void setStarterChoicePending(boolean pending) {
+        this.starterChoicePending = pending;
+    }
+
+    public static String biomeRecord(String biomeId) {
+        return "biome|" + biomeId;
+    }
+
+    public static String regionRecord(BiomeInstanceKey key) {
+        return "region|" + key.biomeKey() + "|" + key.regionX() + "," + key.regionZ();
+    }
+
+    public static String eventRecord(String biomeId) {
+        return "event|" + biomeId;
+    }
+
+    public CatchRecord getCatchRecord(String key) {
+        return key == null ? null : catchRecords.get(key);
+    }
+
+    public void recordCatch(String key, String species, UUID pokemonId) {
+        catchRecords.put(key, new CatchRecord(species, pokemonId));
+    }
+
+    public void recordEscape(String key) {
+        catchRecords.put(key, new CatchRecord(ESCAPED, null));
+    }
+
+    public void retargetCatch(UUID pokemonId, String species) {
+        catchRecords.replaceAll((key, record) -> pokemonId.equals(record.pokemonId())
+                ? new CatchRecord(species, pokemonId) : record);
+    }
+
     public void resetProgress() {
         pendingEvents.clear();
         hasChosenStarter = false;
@@ -203,6 +274,7 @@ public class PlayerState {
         startingBiome = null;
         eventBiomes.clear();
         leftStartingBiome = false;
+        catchRecords.clear();
     }
 
     public NbtCompound toNbt() {
@@ -211,6 +283,9 @@ public class PlayerState {
         tag.putBoolean("ChosenStarter", hasChosenStarter);
         tag.putLong("LastCatchTime", lastCatchTime);
         tag.putBoolean("LeftStartingBiome", leftStartingBiome);
+        tag.putBoolean("CatchHints", catchHints);
+        tag.putInt("StarterRoll", starterRoll);
+        tag.putBoolean("StarterChoicePending", starterChoicePending);
         if (startingBiome != null) {
             tag.putString("StartingBiome", startingBiome);
         }
@@ -245,6 +320,17 @@ public class PlayerState {
             names[n++] = id.getLeastSignificantBits();
         }
         tag.putLongArray("PendingNicknames", names);
+
+        NbtCompound records = new NbtCompound();
+        catchRecords.forEach((key, record) -> {
+            NbtCompound entry = new NbtCompound();
+            entry.putString("Species", record.species());
+            if (record.pokemonId() != null) {
+                entry.putUuid("Pokemon", record.pokemonId());
+            }
+            records.put(key, entry);
+        });
+        tag.put("CatchRecords", records);
         return tag;
     }
 
@@ -253,6 +339,9 @@ public class PlayerState {
         state.hasChosenStarter = tag.getBoolean("ChosenStarter");
         state.lastCatchTime = tag.getLong("LastCatchTime");
         state.leftStartingBiome = tag.getBoolean("LeftStartingBiome");
+        state.catchHints = !tag.contains("CatchHints") || tag.getBoolean("CatchHints");
+        state.starterRoll = tag.getInt("StarterRoll");
+        state.starterChoicePending = tag.getBoolean("StarterChoicePending");
         if (tag.contains("StartingBiome")) {
             state.startingBiome = tag.getString("StartingBiome");
         }
@@ -284,6 +373,12 @@ public class PlayerState {
         long[] names = tag.getLongArray("PendingNicknames");
         for (int i = 0; i + 1 < names.length; i += 2) {
             state.pendingNicknames.add(new UUID(names[i], names[i + 1]));
+        }
+        NbtCompound records = tag.getCompound("CatchRecords");
+        for (String key : records.getKeys()) {
+            NbtCompound entry = records.getCompound(key);
+            state.catchRecords.put(key, new CatchRecord(entry.getString("Species"),
+                    entry.containsUuid("Pokemon") ? entry.getUuid("Pokemon") : null));
         }
         return state;
     }

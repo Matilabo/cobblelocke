@@ -2,11 +2,13 @@ package com.cobblelocke.eventlock;
 
 import com.cobblelocke.Cobblelocke;
 import com.cobblelocke.config.CobblelockeConfig;
+import com.cobblelocke.data.BiomeInstanceKey;
 import com.cobblelocke.data.CobblelockeState;
 import com.cobblelocke.data.PlayerState;
 import com.cobblelocke.net.CobblelockeNetworking;
 import com.cobblelocke.nuzlocke.EvolutionLine;
 import com.cobblelocke.random.PokemonStamper;
+import com.cobblelocke.util.Lang;
 import com.cobblelocke.util.SpeciesPool;
 import com.cobblelocke.util.Worlds;
 import com.cobblemon.mod.common.Cobblemon;
@@ -24,7 +26,9 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Heightmap;
@@ -45,6 +49,8 @@ public final class EventLockService {
     public static final String KEY_EVENT = "cobblelocke_event";
 
     public static final String KEY_EVENT_BIOME = "cobblelocke_event_biome";
+
+    private static final String REGION_PREFIX = "region|";
 
     private static final int BATTLE_START_DELAY_TICKS = 10;
 
@@ -95,25 +101,60 @@ public final class EventLockService {
         missingChecks.remove(playerId);
     }
 
+    // The event lock works on "areas": a biome id, or with Event Lock Region a square of blocks named
+    // region|<dimension>|<size>|<x>|<z>. The starting area, fired events and pending encounters all use them.
+    public static String areaAt(ServerWorld world, BlockPos pos, CobblelockeConfig config) {
+        if (config.eventLockRegion > 0) {
+            int size = config.eventLockRegion;
+            return REGION_PREFIX + world.getRegistryKey().getValue() + "|" + size + "|"
+                    + Math.floorDiv(pos.getX(), size) + "|" + Math.floorDiv(pos.getZ(), size);
+        }
+        return Worlds.biomeId(Worlds.biomeAt(world, pos));
+    }
+
+    public static String areaAt(ServerPlayerEntity player, CobblelockeConfig config) {
+        return areaAt(player.getServerWorld(), player.getBlockPos(), config);
+    }
+
+    public static boolean isRegionArea(String area) {
+        return area != null && area.startsWith(REGION_PREFIX);
+    }
+
+    public static MutableText areaName(String area) {
+        if (isRegionArea(area)) {
+            String[] parts = area.split("\\|");
+            if (parts.length == 5) {
+                return Lang.tr("area.region", "Region (%1$s, %2$s)", parts[3], parts[4]);
+            }
+        }
+        return Lang.biome(area);
+    }
+
+    public static String targetArea(PlayerState playerState, PokemonEntity targetEntity, ServerWorld world,
+                                    BlockPos pos, CobblelockeConfig config) {
+        String trigger = triggerBiome(playerState, targetEntity);
+        return trigger != null ? trigger : areaAt(world, pos, config);
+    }
+
     public static void onStarterChosen(ServerPlayerEntity player, PlayerState playerState) {
-        RegistryKey<Biome> biome = Worlds.biomeAt(player);
-        String biomeId = Worlds.biomeId(biome);
-        if (biomeId == null) {
+        CobblelockeConfig config = Cobblelocke.config();
+        String area = areaAt(player, config);
+        if (area == null) {
             return;
         }
-        playerState.setStartingBiome(biomeId);
+        playerState.setStartingBiome(area);
 
-        playerState.markEventFired(biomeId);
+        playerState.markEventFired(area);
 
-        CobblelockeConfig config = Cobblelocke.config();
         if (config.runActive && config.firstCatchEventLocked) {
-            player.sendMessage(Text.literal("§d★ Event Lock active. §7You cannot catch anything until you "
-                    + "leave §e" + Worlds.prettyBiomeName(biome) + "§7."));
+            player.sendMessage(Lang.tr("event.lock_active",
+                    "§d★ Event Lock active. §7You cannot catch anything until you leave %s§7.",
+                    Lang.hl(areaName(area), Formatting.YELLOW)));
         }
     }
 
-    public static String catchRefusal(ServerPlayerEntity player, PlayerState playerState,
-                                      CobblelockeConfig config, String targetBiomeId,
+    public static MutableText catchRefusal(ServerPlayerEntity player, PlayerState playerState,
+                                      CobblelockeConfig config, String targetArea,
                                       PokemonEntity targetEntity) {
         if (!config.firstCatchEventLocked || !playerState.hasChosenStarter()) {
             return null;
@@ -121,11 +162,15 @@ public final class EventLockService {
 
         String starting = playerState.getStartingBiome();
         if (!playerState.hasLeftStartingBiome() && starting != null) {
-            String current = Worlds.biomeId(Worlds.biomeAt(player));
+            String current = areaAt(player, config);
             if (current != null && !current.equals(starting)) {
                 playerState.setLeftStartingBiome(true);
+            } else if (isRegionArea(starting)) {
+                return Lang.tr("catch.event_starting_region",
+                        "§cYou cannot catch anything yet. §7Travel to a different region first. (Event Lock)");
             } else {
-                return "§cYou cannot catch anything yet. §7Travel to a different biome first. (Event Lock)";
+                return Lang.tr("catch.event_starting_biome",
+                        "§cYou cannot catch anything yet. §7Travel to a different biome first. (Event Lock)");
             }
         }
 
@@ -133,22 +178,28 @@ public final class EventLockService {
             return null;
         }
 
-        if (targetBiomeId == null) {
+        if (targetArea == null) {
             return null;
         }
-        String biomeName = Worlds.prettyBiomeName(targetBiomeId);
+        MutableText biomeName = Lang.hl(areaName(targetArea), Formatting.YELLOW);
 
-        UUID pending = playerState.getPendingEvent(targetBiomeId);
+        UUID pending = playerState.getPendingEvent(targetArea);
         if (pending != null) {
             if (targetEntity != null && pending.equals(targetEntity.getUuid())) {
                 return null;
             }
-            return "§cThe first catch in §e" + biomeName
-                    + "§c belongs to its event encounter. (Event Lock)";
+            return Lang.tr("catch.event_pending",
+                    "§cThe first catch in %s§c belongs to its event encounter. (Event Lock)", biomeName);
         }
-        if (!playerState.hasEventFiredIn(targetBiomeId)) {
-            return "§cYou have not faced the encounter in §e" + biomeName
-                    + "§c yet. Step into that biome first. (Event Lock)";
+        if (!playerState.hasEventFiredIn(targetArea)) {
+            if (isRegionArea(targetArea)) {
+                return Lang.tr("catch.event_not_faced_region",
+                        "§cYou have not faced the encounter in %s§c yet. Step into that region first. (Event Lock)",
+                        biomeName);
+            }
+            return Lang.tr("catch.event_not_faced",
+                    "§cYou have not faced the encounter in %s§c yet. Step into that biome first. (Event Lock)",
+                    biomeName);
         }
         return null;
     }
@@ -175,13 +226,18 @@ public final class EventLockService {
 
     public static String catchBiome(PlayerState playerState, PokemonEntity targetEntity, String standingIn) {
         String trigger = triggerBiome(playerState, targetEntity);
-        return trigger != null ? trigger : standingIn;
+        return trigger != null && !isRegionArea(trigger) ? trigger : standingIn;
     }
 
-    public static void onPokemonCaptured(ServerPlayerEntity player, Pokemon pokemon) {
+    public static boolean isExtraCatch(CobblelockeConfig config, PlayerState playerState, PokemonEntity targetEntity) {
+        return config.firstCatchEventLocked && config.isExtraCatch && triggerBiome(playerState, targetEntity) != null;
+    }
+
+    // Returns whether the caught Pokemon was an event encounter.
+    public static boolean onPokemonCaptured(ServerPlayerEntity player, Pokemon pokemon) {
         NbtCompound data = pokemon == null ? null : pokemon.getPersistentData();
         if (data == null || !data.getBoolean(KEY_EVENT)) {
-            return;
+            return false;
         }
         String biomeId = data.getString(KEY_EVENT_BIOME);
         data.remove(KEY_EVENT);
@@ -189,7 +245,7 @@ public final class EventLockService {
 
         CobblelockeState state = Cobblelocke.state();
         if (state == null || biomeId == null || biomeId.isEmpty()) {
-            return;
+            return true;
         }
         PlayerState playerState = state.getPlayer(player.getUuid());
         UUID entityId = playerState.getPendingEvent(biomeId);
@@ -197,7 +253,9 @@ public final class EventLockService {
             missingChecks.remove(entityId);
         }
         playerState.clearPendingEvent(biomeId);
+        playerState.recordCatch(PlayerState.eventRecord(biomeId), pokemon.getSpecies().getName(), pokemon.getUuid());
         state.markDirty();
+        return true;
     }
 
     public static void tick(MinecraftServer server) {
@@ -231,8 +289,7 @@ public final class EventLockService {
         if (!playerState.hasChosenStarter()) {
             return;
         }
-        RegistryKey<Biome> biome = Worlds.biomeAt(player);
-        String biomeId = Worlds.biomeId(biome);
+        String biomeId = areaAt(player, state.getConfig());
         if (biomeId == null) {
             return;
         }
@@ -247,7 +304,9 @@ public final class EventLockService {
         if (!playerState.hasLeftStartingBiome() && !biomeId.equals(playerState.getStartingBiome())) {
             playerState.setLeftStartingBiome(true);
             state.markDirty();
-            player.sendMessage(Text.literal("§a★ You left your starting biome. Catching is now unlocked."));
+            player.sendMessage(isRegionArea(biomeId)
+                    ? Lang.tr("event.left_start_region", "§a★ You left your starting region. Catching is now unlocked.")
+                    : Lang.tr("event.left_start", "§a★ You left your starting biome. Catching is now unlocked."));
         }
 
         if (playerState.hasEventFiredIn(biomeId)) {
@@ -270,8 +329,8 @@ public final class EventLockService {
 
         playerState.markEventFired(biomeId);
         state.markDirty();
-        player.sendMessage(Text.literal("§d★ A wild encounter blocks your path in §e"
-                + Worlds.prettyBiomeName(biome) + "§d!"));
+        player.sendMessage(Lang.tr("event.encounter",
+                "§d★ A wild encounter blocks your path in %s§d!", Lang.hl(areaName(biomeId), Formatting.YELLOW)));
 
         String clip = EncounterAnimations.choose(player, state.getConfig());
         boolean playing = CobblelockeNetworking.sendCutscene(player, clip);
@@ -335,16 +394,34 @@ public final class EventLockService {
             }
             missingChecks.remove(entityId);
             playerState.clearPendingEvent(biomeId);
+            playerState.recordEscape(PlayerState.eventRecord(biomeId));
 
-            String biomeName = Worlds.prettyBiomeName(biomeId);
-            if (config.nuzlockeModeEnabled && config.oneCatchPerBiome
-                    && !playerState.hasCapturedInBiome(biomeId)) {
-                playerState.recordBiomeCapture(biomeId);
-                player.sendMessage(Text.literal("§7The encounter in §e" + biomeName
-                        + "§7 got away. That was this biome's encounter."));
+            MutableText biomeName = Lang.hl(areaName(biomeId), Formatting.YELLOW);
+            boolean burned = false;
+            if (config.nuzlockeModeEnabled && !config.isExtraCatch) {
+                if (config.oneCatchPerBiome && !isRegionArea(biomeId) && !playerState.hasCapturedInBiome(biomeId)) {
+                    playerState.recordBiomeCapture(biomeId);
+                    playerState.recordEscape(PlayerState.biomeRecord(biomeId));
+                    burned = true;
+                }
+                // The encounter is gone, so its region is taken from where the player stands.
+                RegistryKey<Biome> standing = Worlds.biomeAt(player);
+                if (config.oneCatchPerRegion > 0 && standing != null) {
+                    BiomeInstanceKey region = BiomeInstanceKey.fromPosition(standing, player.getBlockPos(),
+                            config.oneCatchPerRegion);
+                    if (!playerState.hasCapturedInInstance(region)) {
+                        playerState.recordInstanceCapture(region);
+                        playerState.recordEscape(PlayerState.regionRecord(region));
+                        burned = true;
+                    }
+                }
+            }
+            if (burned) {
+                player.sendMessage(Lang.tr("event.got_away",
+                        "§7The encounter in %s§7 got away. That was this biome's encounter.", biomeName));
             } else {
-                player.sendMessage(Text.literal("§7The encounter in §e" + biomeName
-                        + "§7 is over. Catching there is open."));
+                player.sendMessage(Lang.tr("event.over",
+                        "§7The encounter in %s§7 is over. Catching there is open.", biomeName));
             }
             state.markDirty();
         }
@@ -360,7 +437,7 @@ public final class EventLockService {
         return null;
     }
 
-    private static boolean hasEncounterUnderway(UUID playerId) {
+    public static boolean hasEncounterUnderway(UUID playerId) {
         return cutscenes.stream().anyMatch(cutscene -> cutscene.playerId().equals(playerId))
                 || battles.stream().anyMatch(battle -> battle.playerId().equals(playerId));
     }
@@ -475,7 +552,8 @@ public final class EventLockService {
 
         playerState.setPendingEvent(biomeId, entity.getUuid());
         state.markDirty();
-        player.sendMessage(Text.literal("§d★ A wild §b" + species.getName() + "§d appeared!"));
+        player.sendMessage(Lang.tr("event.appeared",
+                "§d★ A wild %s§d appeared!", Lang.hl(Lang.species(species), Formatting.AQUA)));
         battles.add(new PendingBattle(player.getUuid(), entity.getUuid(),
                 new int[]{Math.max(MIN_BATTLE_DELAY_TICKS, battleDelayTicks)}));
     }

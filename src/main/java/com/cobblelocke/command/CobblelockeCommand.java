@@ -9,6 +9,9 @@ import com.cobblelocke.data.PlayerState;
 import com.cobblelocke.eventlock.EncounterAnimations;
 import com.cobblelocke.eventlock.EventLockService;
 import com.cobblelocke.net.CobblelockeNetworking;
+import com.cobblelocke.nuzlocke.CatchCheck;
+import com.cobblelocke.util.Lang;
+import net.minecraft.util.Formatting;
 import com.cobblelocke.random.GlobalPools;
 import com.cobblelocke.random.PokemonStamper;
 import com.cobblemon.mod.common.Cobblemon;
@@ -45,8 +48,8 @@ public final class CobblelockeCommand {
                 .executes(context -> {
                     ServerPlayerEntity player = context.getSource().getPlayer();
                     if (player != null) {
-                        player.sendMessage(Text.literal("§dCobblelocke §7- use §f/cobblelocke config"
-                                + "§7 to open the settings menu."));
+                        player.sendMessage(Lang.tr("command.root",
+                                "§dCobblelocke §7- use §f/cobblelocke config§7 to open the settings menu."));
                     }
                     return 1;
                 })
@@ -54,8 +57,15 @@ public final class CobblelockeCommand {
                         .requires(source -> allowed(source, true))
                         .executes(context -> openConfig(context.getSource())))
                 .then(CommandManager.literal("status")
-                        .requires(source -> allowed(source, false))
                         .executes(context -> showStatus(context.getSource())))
+                .then(CommandManager.literal("here")
+                        .executes(context -> showHere(context.getSource())))
+                .then(CommandManager.literal("hints")
+                        .executes(context -> showHints(context.getSource()))
+                        .then(CommandManager.literal("on")
+                                .executes(context -> setHints(context.getSource(), true)))
+                        .then(CommandManager.literal("off")
+                                .executes(context -> setHints(context.getSource(), false))))
                 .then(CommandManager.literal("start")
                         .requires(source -> allowed(source, false))
                         .executes(context -> setRunActive(context.getSource(), true)))
@@ -107,9 +117,10 @@ public final class CobblelockeCommand {
                                                 StringArgumentType.getString(context, "value")))))));
     }
 
-    private static final String DENIED =
-            "Only the host or an operator can do that. Server owners can widen this with "
-                    + "serverConfigMode in config/cobblelocke/config.json5.";
+    private static Text denied() {
+        return Lang.tr("command.denied", "Only the host or an operator can do that. Server owners can widen "
+                + "this with serverConfigMode in config/cobblelocke/config.json5.");
+    }
 
     private static boolean allowed(ServerCommandSource source, boolean opensTheMenu) {
         ServerPlayerEntity player;
@@ -143,7 +154,7 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
 
@@ -152,14 +163,14 @@ public final class CobblelockeCommand {
         try {
             field = CobblelockeConfig.class.getField(option);
         } catch (NoSuchFieldException e) {
-            source.sendError(Text.literal("Unknown option: " + option));
+            source.sendError(Lang.tr("command.set.unknown", "Unknown option: %s", option));
             return 0;
         }
 
         try {
             if (field.getType() == boolean.class) {
                 if (!value.equalsIgnoreCase("true") && !value.equalsIgnoreCase("false")) {
-                    source.sendError(Text.literal(option + " expects true or false."));
+                    source.sendError(Lang.tr("command.set.boolean", "%s expects true or false.", option));
                     return 0;
                 }
                 field.setBoolean(config, Boolean.parseBoolean(value));
@@ -178,7 +189,8 @@ public final class CobblelockeCommand {
             } else if (field.getType() == String.class) {
                 ConfigOptions.Spec spec = ConfigOptions.byKey(option);
                 if (spec != null && spec.kind() == ConfigOptions.Kind.OPTION && !spec.ids().contains(value)) {
-                    source.sendError(Text.literal(option + " expects one of: " + String.join(", ", spec.ids())));
+                    source.sendError(Lang.tr("command.set.one_of", "%1$s expects one of: %2$s", option,
+                            String.join(", ", spec.ids())));
                     return 0;
                 }
                 field.set(config, value);
@@ -188,20 +200,21 @@ public final class CobblelockeCommand {
                     config.animationPreset = "custom";
                 }
             } else {
-                source.sendError(Text.literal(option + " cannot be set from a command."));
+                source.sendError(Lang.tr("command.set.unsupported", "%s cannot be set from a command.", option));
                 return 0;
             }
         } catch (NumberFormatException e) {
-            source.sendError(Text.literal(option + " expects a whole number."));
+            source.sendError(Lang.tr("command.set.number", "%s expects a whole number.", option));
             return 0;
         } catch (IllegalAccessException e) {
-            source.sendError(Text.literal("Could not set " + option + "."));
+            source.sendError(Lang.tr("command.set.failed", "Could not set %s.", option));
             return 0;
         }
 
         config.configured = true;
         state.saveConfig(config);
-        source.sendFeedback(() -> Text.literal("§aSet §f" + option + "§a to §f" + value + "§a."), true);
+        source.sendFeedback(() -> Lang.tr("command.set.done", "§aSet %1$s§a to %2$s§a.",
+                Lang.hl(option, Formatting.WHITE), Lang.hl(value, Formatting.WHITE)), true);
         return 1;
     }
 
@@ -212,7 +225,7 @@ public final class CobblelockeCommand {
         }
         Species species = PokemonSpecies.getByName(speciesName.toLowerCase(Locale.ROOT));
         if (species == null) {
-            source.sendError(Text.literal("Unknown species: " + speciesName));
+            source.sendError(Lang.tr("command.inspect.unknown", "Unknown species: %s", speciesName));
             return 0;
         }
 
@@ -223,27 +236,34 @@ public final class CobblelockeCommand {
         PokemonStamper.stamp(sample, state.getConfig(), state.getConfigGeneration(),
                 PokemonStamper.Context.WILD);
 
-        String types = sample.getPrimaryType().getName()
-                + (sample.getSecondaryType() != null ? " / " + sample.getSecondaryType().getName() : "");
-        List<String> moves = new ArrayList<>();
-        sample.getMoveSet().getMoves().forEach(move -> moves.add(move.getName()));
+        List<Text> typeNames = new ArrayList<>();
+        typeNames.add(sample.getPrimaryType().getDisplayName());
+        if (sample.getSecondaryType() != null) {
+            typeNames.add(sample.getSecondaryType().getDisplayName());
+        }
+        List<Text> moves = new ArrayList<>();
+        sample.getMoveSet().getMoves().forEach(move -> moves.add(move.getDisplayName()));
+        Text types = Lang.join(typeNames, Text.literal(" / "));
+        Text ability = Text.translatable(sample.getAbility().getDisplayName());
 
-        source.sendFeedback(() -> Text.literal("§d" + species.getName() + "§7 at level 50"), false);
-        source.sendFeedback(() -> Text.literal("§7  Types: §f" + types), false);
-        source.sendFeedback(() -> Text.literal("§7  Ability: §f" + sample.getAbility().getName()), false);
-        source.sendFeedback(() -> Text.literal("§7  Moves: §f" + String.join(", ", moves)), false);
+        source.sendFeedback(() -> Lang.tr("command.inspect.header", "§d%s§7 at level 50", Lang.species(species)), false);
+        source.sendFeedback(() -> Lang.tr("command.inspect.types", "§7  Types: %s", Lang.hl(types, Formatting.WHITE)), false);
+        source.sendFeedback(() -> Lang.tr("command.inspect.ability", "§7  Ability: %s",
+                Lang.hl(ability, Formatting.WHITE)), false);
+        source.sendFeedback(() -> Lang.tr("command.inspect.moves", "§7  Moves: %s",
+                Lang.hl(Lang.join(moves), Formatting.WHITE)), false);
         return 1;
     }
 
     private static int openConfig(ServerCommandSource source) {
         ServerPlayerEntity player = source.getPlayer();
         if (player == null) {
-            source.sendError(Text.literal("Only a player can open the config screen."));
+            source.sendError(Lang.tr("command.config.players_only", "Only a player can open the config screen."));
             return 0;
         }
         CobblelockeState state = Cobblelocke.state();
         if (state != null && !state.canUseCommand(player, true)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         CobblelockeNetworking.sendOpenConfig(player);
@@ -257,7 +277,7 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         CobblelockeConfig config = state.getConfig().copy();
@@ -272,9 +292,9 @@ public final class CobblelockeCommand {
                 pools.prefillAll(saved);
             }
         }
-        source.sendFeedback(() -> Text.literal(active
-                ? "§d★ Cobblelocke run started."
-                : "§7Cobblelocke run stopped."), true);
+        source.sendFeedback(() -> active
+                ? Lang.tr("command.run.started", "§d★ Cobblelocke run started.")
+                : Lang.tr("command.run.stopped", "§7Cobblelocke run stopped."), true);
         return 1;
     }
 
@@ -286,15 +306,26 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         if (targets == null) {
             state.resetRun();
             EventLockService.reset();
-            source.sendFeedback(() -> Text.literal("§cCobblelocke run progress reset for everyone. "
-                    + "Catch history, permadeath records, event-lock progress and the shared "
-                    + "spawn-cap memory are cleared."), true);
+            CobblelockeNetworking.rerollGlobalPools(state.getConfig());
+            // Everyone gets a fresh starter choice: online players now, the rest when they next join.
+            for (PlayerState playerState : state.getPlayers().values()) {
+                playerState.setStarterChoicePending(true);
+            }
+            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                online.sendMessage(Lang.tr("command.reset.yours", "§cYour Cobblelocke run was reset."));
+                offerStarterAgain(online, state);
+            }
+            state.markDirty();
+            source.sendFeedback(() -> Lang.tr("command.reset.everyone", "§cCobblelocke run progress reset for "
+                    + "everyone. Catch history, permadeath records and event-lock progress are cleared, the "
+                    + "global pools were re-rolled and everyone gets a new starter choice. The spawn cap and "
+                    + "the regions it remembers are kept."), true);
             return Math.max(1, server.getPlayerManager().getCurrentPlayerCount());
         }
         List<String> names = new ArrayList<>();
@@ -302,12 +333,58 @@ public final class CobblelockeCommand {
             state.resetRun(target.getUuid());
             EventLockService.reset(target.getUuid());
             names.add(target.getName().getString());
-            target.sendMessage(Text.literal("§cYour Cobblelocke run was reset."));
+            target.sendMessage(Lang.tr("command.reset.yours", "§cYour Cobblelocke run was reset."));
+            offerStarterAgain(target, state);
         }
-        source.sendFeedback(() -> Text.literal("§cCobblelocke run progress reset for §f"
-                + String.join(", ", names) + "§c. §7Nobody else was touched; run "
-                + "§f/cobblelocke reset§7 with no player to clear the whole world."), true);
+        state.markDirty();
+        source.sendFeedback(() -> Lang.tr("command.reset.players", "§cCobblelocke run progress reset for %s§c, "
+                + "with a new starter choice. §7Nobody else was touched and the global pools were kept; run "
+                + "§f/cobblelocke reset§7 with no player to clear the whole world.",
+                Lang.hl(String.join(", ", names), Formatting.WHITE)), true);
         return names.size();
+    }
+
+    private static int showHere(ServerCommandSource source) {
+        ServerPlayerEntity player = source.getPlayer();
+        if (player == null) {
+            source.sendError(Lang.tr("command.players_only", "Only a player can check this."));
+            return 0;
+        }
+        for (Text line : CatchCheck.report(player)) {
+            source.sendFeedback(() -> line, false);
+        }
+        return 1;
+    }
+
+    private static int showHints(ServerCommandSource source) {
+        ServerPlayerEntity player = source.getPlayer();
+        CobblelockeState state = Cobblelocke.state();
+        if (player == null || state == null) {
+            source.sendError(Lang.tr("command.players_only", "Only a player can check this."));
+            return 0;
+        }
+        boolean on = state.getPlayer(player.getUuid()).wantsCatchHints();
+        source.sendFeedback(() -> on
+                ? Lang.tr("command.hints.state_on", "§7Catch hints are §aon§7. Turn them off with /cobblelocke hints off.")
+                : Lang.tr("command.hints.state_off", "§7Catch hints are §coff§7. Turn them on with /cobblelocke hints on."),
+                false);
+        return 1;
+    }
+
+    private static int setHints(ServerCommandSource source, boolean on) {
+        ServerPlayerEntity player = source.getPlayer();
+        CobblelockeState state = Cobblelocke.state();
+        if (player == null || state == null) {
+            source.sendError(Lang.tr("command.players_only", "Only a player can check this."));
+            return 0;
+        }
+        state.getPlayer(player.getUuid()).setCatchHints(on);
+        state.markDirty();
+        source.sendFeedback(() -> on
+                ? Lang.tr("command.hints.on", "§aCatch hints on. §7You will see whether you can catch as you move between "
+                        + "biomes, and when a wild battle starts.")
+                : Lang.tr("command.hints.off", "§7Catch hints off. §7/cobblelocke here still works any time."), false);
+        return 1;
     }
 
     private static int setSpawnCap(ServerCommandSource source, boolean on) {
@@ -317,7 +394,7 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         if (on) {
@@ -330,17 +407,18 @@ public final class CobblelockeCommand {
         ConfigFiles.writeConfig(state.getConfig(), StatusReport.asksOnFirstJoin());
 
         CobblelockeConfig config = state.getConfig();
-        String message;
+        Text message;
         if (on) {
             message = config.nuzlockeModeEnabled && config.capSpawningPerRegionChunks > 0
-                    ? "§aSpawn cap on. §7The Cap Spawning rules now apply even before a run starts."
-                    : "§aSpawn cap on. §7It takes effect once Nuzlocke Mode is on and Cap Spawning Per "
-                            + "Region by Size is set.";
+                    ? Lang.tr("command.spawncap.on", "§aSpawn cap on. §7The Cap Spawning rules now apply even "
+                            + "before a run starts.")
+                    : Lang.tr("command.spawncap.on_inactive", "§aSpawn cap on. §7It takes effect once Nuzlocke "
+                            + "Mode is on and Cap Spawning Per Region by Size is set.");
         } else {
-            message = "§eSpawn cap off. §7It stays off until the next run starts, and every remembered "
-                    + "region was forgotten.";
+            message = Lang.tr("command.spawncap.off", "§eSpawn cap off. §7It stays off until the next run starts, "
+                    + "and every remembered region was forgotten.");
         }
-        source.sendFeedback(() -> Text.literal(message), true);
+        source.sendFeedback(() -> message, true);
         return 1;
     }
 
@@ -350,23 +428,32 @@ public final class CobblelockeCommand {
             return 0;
         }
         CobblelockeConfig config = state.getConfig();
-        String status = state.isSpawnCapActive() ? "§aactive" : "§7not active";
-        String why;
+        Text status = state.isSpawnCapActive()
+                ? Lang.tr("command.spawncap.active", "§aactive")
+                : Lang.tr("command.spawncap.inactive", "§7not active");
+        Text why;
         if (!config.nuzlockeModeEnabled || config.capSpawningPerRegionChunks <= 0) {
-            why = "Nuzlocke Mode and Cap Spawning Per Region by Size must both be on.";
+            why = Lang.tr("command.spawncap.why_rules", "Nuzlocke Mode and Cap Spawning Per Region by Size must both "
+                    + "be on.");
         } else if (config.spawnCapAlwaysOn) {
-            why = "spawnCapAlwaysOn is on, so it applies even before a run.";
+            why = Lang.tr("command.spawncap.why_always", "spawnCapAlwaysOn is on, so it applies even before a run.");
         } else if (state.hasRunEverStarted() || config.runActive) {
-            why = "a run has started on this world, so it stays on through stops and resets.";
+            why = Lang.tr("command.spawncap.why_started", "a run has started on this world, so it stays on through "
+                    + "stops and resets.");
         } else {
-            why = "no run has started yet. Use /cobblelocke spawncap on to apply it now.";
+            why = Lang.tr("command.spawncap.why_waiting", "no run has started yet. Use /cobblelocke spawncap on to "
+                    + "apply it now.");
         }
-        source.sendFeedback(() -> Text.literal("§7Spawn cap: " + status + "§7, " + why), false);
+        source.sendFeedback(() -> Lang.tr("command.spawncap.status", "§7Spawn cap: %1$s§7, %2$s", status, why), false);
         if (config.capSpawningPerRegionChunks > 0) {
-            source.sendFeedback(() -> Text.literal("§7  " + config.capSpawningPerRegionCount
-                    + " per " + config.capSpawningPerRegionChunks + " chunk region, "
-                    + (config.capSpawningPerRegionByPlayer ? "counted per player" : "shared by everyone")
-                    + (config.capSpawningPerRegionMemory ? ", with memory" : "")), false);
+            Text sharing = config.capSpawningPerRegionByPlayer
+                    ? Lang.tr("command.spawncap.per_player", "counted per player")
+                    : Lang.tr("command.spawncap.shared", "shared by everyone");
+            Text memory = config.capSpawningPerRegionMemory
+                    ? Lang.tr("command.spawncap.with_memory", ", with memory")
+                    : Text.empty();
+            source.sendFeedback(() -> Lang.tr("command.spawncap.detail", "§7  %1$s per %2$s chunk region, %3$s%4$s",
+                    config.capSpawningPerRegionCount, config.capSpawningPerRegionChunks, sharing, memory), false);
         }
         return 1;
     }
@@ -378,21 +465,21 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         String wanted = name.trim();
         if (wanted.isEmpty()) {
-            source.sendError(Text.literal("Give the preset a name."));
+            source.sendError(Lang.tr("command.export.no_name", "Give the preset a name."));
             return 0;
         }
         ConfigFiles.ExportResult result = ConfigFiles.exportPreset(wanted, state.getConfig());
-        String message = CobblelockeNetworking.exportMessage(wanted, result);
+        Text message = CobblelockeNetworking.exportMessage(wanted, result);
         if (result == ConfigFiles.ExportResult.FAILED) {
-            source.sendError(Text.literal(message));
+            source.sendError(message);
             return 0;
         }
-        source.sendFeedback(() -> Text.literal(message), true);
+        source.sendFeedback(() -> message, true);
         return 1;
     }
 
@@ -404,13 +491,13 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         Collection<ServerPlayerEntity> chosen = targets;
         if (chosen == null) {
             if (player == null) {
-                source.sendError(Text.literal("Name a player, or use @a for everyone."));
+                source.sendError(Lang.tr("command.starter.no_target", "Name a player, or use @a for everyone."));
                 return 0;
             }
             chosen = List.of(player);
@@ -423,17 +510,23 @@ public final class CobblelockeCommand {
             }
         }
         if (names.isEmpty()) {
-            source.sendError(Text.literal("Could not reopen the starter choice."));
+            source.sendError(Lang.tr("command.starter.failed", "Could not reopen the starter choice."));
             return 0;
         }
         state.markDirty();
-        source.sendFeedback(() -> Text.literal("§aStarter choice reopened for §f"
-                + String.join(", ", names) + "§a."), true);
+        source.sendFeedback(() -> Lang.tr("command.starter.done", "§aStarter choice re-rolled and reopened for %s§a.",
+                Lang.hl(String.join(", ", names), Formatting.WHITE)), true);
         return names.size();
     }
 
-    private static boolean offerStarterAgain(ServerPlayerEntity target, CobblelockeState state) {
+    // Reopens Cobblemon's starter prompt with a freshly rolled set of starters. The global pools are
+    // left alone: only a world-wide reset or a new run re-rolls those.
+    public static boolean offerStarterAgain(ServerPlayerEntity target, CobblelockeState state) {
         try {
+            PlayerState rolling = state.getPlayer(target.getUuid());
+            rolling.bumpStarterRoll();
+            rolling.setStarterChoicePending(false);
+            state.markDirty();
             GeneralPlayerData data = Cobblemon.INSTANCE.getPlayerDataManager().getGenericData(target);
             data.setStarterPrompted(false);
             data.setStarterSelected(false);
@@ -445,7 +538,7 @@ public final class CobblelockeCommand {
             playerState.setHasChosenStarter(false);
 
             Cobblemon.INSTANCE.getStarterHandler().requestStarterChoice(target);
-            target.sendMessage(Text.literal("§d★ You can choose a starter again."));
+            target.sendMessage(Lang.tr("command.starter.yours", "§d★ You can choose a starter again."));
             return true;
         } catch (Exception e) {
             Cobblelocke.LOGGER.warn("Could not reopen the starter choice for {}: {}",
@@ -462,14 +555,14 @@ public final class CobblelockeCommand {
             return 0;
         }
         if (player != null && !state.canUseCommand(player, false)) {
-            source.sendError(Text.literal(DENIED));
+            source.sendError(denied());
             return 0;
         }
         pools.reset();
         pools.prefillAll(state.getConfig());
 
         state.saveConfig(state.getConfig().copy());
-        source.sendFeedback(() -> Text.literal("§aGlobal pools regenerated and written to "
+        source.sendFeedback(() -> Lang.tr("command.pools.done", "§aGlobal pools regenerated and written to "
                 + "§fcobblelocke/global_pools.json§a."), true);
         return 1;
     }
@@ -483,22 +576,26 @@ public final class CobblelockeCommand {
         CobblelockeConfig config = state.getConfig();
 
         source.sendFeedback(() -> Text.literal("§5═══════ §d§lCobblelocke§5 ═══════"), false);
-        source.sendFeedback(() -> Text.literal("§7Run: " + (config.runActive ? "§aACTIVE" : "§cinactive")), false);
+        source.sendFeedback(() -> Lang.tr("status.run", "§7Run: %s", config.runActive
+                ? Lang.tr("status.run.active", "§aACTIVE")
+                : Lang.tr("status.run.inactive", "§cinactive")), false);
 
         if (player != null) {
             PlayerState playerState = state.getPlayer(player.getUuid());
-            source.sendFeedback(() -> Text.literal("§7Starter chosen: "
-                    + (playerState.hasChosenStarter() ? "§ayes" : "§cno")), false);
+            source.sendFeedback(() -> Lang.tr("status.starter", "§7Starter chosen: %s", playerState.hasChosenStarter()
+                    ? Lang.tr("status.yes", "§ayes")
+                    : Lang.tr("status.no", "§cno")), false);
             if (config.firstCatchEventLocked) {
-                source.sendFeedback(() -> Text.literal("§7Event lock: "
-                        + (playerState.hasLeftStartingBiome()
-                        ? "§acatching unlocked"
-                        : "§clocked §7- leave your starting biome")), false);
+                source.sendFeedback(() -> Lang.tr("status.player_event", "§7Event lock: %s", playerState.hasLeftStartingBiome()
+                        ? Lang.tr("status.player_event.unlocked", "§acatching unlocked")
+                        : com.cobblelocke.eventlock.EventLockService.isRegionArea(playerState.getStartingBiome())
+                        ? Lang.tr("status.player_event.locked_region", "§clocked §7- leave your starting region")
+                        : Lang.tr("status.player_event.locked", "§clocked §7- leave your starting biome")), false);
             }
         }
 
-        for (String line : StatusReport.of(config, StatusReport.asksOnFirstJoin())) {
-            source.sendFeedback(() -> Text.literal(line), false);
+        for (Text line : StatusReport.of(config, StatusReport.asksOnFirstJoin())) {
+            source.sendFeedback(() -> line, false);
         }
         source.sendFeedback(() -> Text.literal("§5══════════════════════════"), false);
         return 1;

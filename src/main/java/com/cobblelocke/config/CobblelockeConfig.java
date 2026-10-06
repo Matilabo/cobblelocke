@@ -192,6 +192,10 @@ public class CobblelockeConfig {
 
     public boolean firstCatchEventLocked = false;
 
+    public boolean isExtraCatch = false;
+
+    public int eventLockRegion = 0;
+
     public String animationPreset = "retro";
 
     public String animOverworld = "retro_grass";

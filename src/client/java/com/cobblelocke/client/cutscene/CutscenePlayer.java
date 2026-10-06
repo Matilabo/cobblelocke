@@ -292,7 +292,8 @@ public final class CutscenePlayer {
         context.getMatrices().push();
         context.getMatrices().translate(0.0f, 0.0f, 900.0f);
         context.fill(0, centerY - band, width, centerY + band, 0xCC1A0A2E);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("A wild encounter!"),
+        context.drawCenteredTextWithShadow(client.textRenderer,
+                Text.literal(com.cobblelocke.client.gui.Tr.get("ui.wild_encounter", "A wild encounter!")),
                 width / 2, centerY - 4, 0xFFE9C7FF);
         context.getMatrices().pop();
     }

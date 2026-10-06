@@ -2,6 +2,7 @@ package com.cobblelocke.client.gui;
 
 import com.cobblelocke.Cobblelocke;
 import com.cobblelocke.config.CobblelockeConfig;
+import com.cobblelocke.config.ConfigFiles;
 import com.cobblelocke.config.ConfigOptions;
 import com.cobblelocke.eventlock.EncounterAnimations;
 import com.cobblelocke.config.ConfigOptions.Kind;
@@ -256,7 +257,7 @@ public class CobblelockeConfigScreen extends Screen {
     private String halfLabel(Spec spec, boolean high) {
         int value = getInt(rangeKey(spec, high));
         int index = spec.values().indexOf(value);
-        return index >= 0 && !spec.labels().isEmpty() ? spec.labels().get(index) : String.valueOf(value);
+        return index >= 0 && !spec.labels().isEmpty() ? Tr.value(spec.labels().get(index)) : String.valueOf(value);
     }
 
     private int sliderIndex(Spec spec) {
@@ -276,27 +277,28 @@ public class CobblelockeConfigScreen extends Screen {
 
     private String valueLabel(Spec spec) {
         return switch (spec.kind()) {
-            case TOGGLE -> getBool(spec.key()) ? "On" : "Off";
+            case TOGGLE -> getBool(spec.key()) ? Tr.value("On") : Tr.value("Off");
             case CHOICE -> {
                 int index = getInt(spec.key());
-                yield index >= 0 && index < spec.labels().size() ? spec.labels().get(index) : "?";
+                yield index >= 0 && index < spec.labels().size() ? Tr.value(spec.labels().get(index)) : "?";
             }
-            case OPTION -> spec.labels().get(spec.indexOfId(getString(spec.key())));
+            case OPTION -> Tr.value(spec.labels().get(spec.indexOfId(getString(spec.key()))));
             case SLIDER -> {
                 int value = getInt(spec.key());
                 int index = spec.values().indexOf(value);
                 if (index >= 0 && !spec.labels().isEmpty()) {
-                    yield spec.labels().get(index);
+                    yield Tr.value(spec.labels().get(index));
                 }
                 yield switch (spec.unit()) {
-                    case "in" -> value <= 1 ? "Always" : "1 in " + value;
-                    case "s" -> value <= 0 ? "Off" : duration(value);
+                    case "in" -> value <= 1 ? Tr.value("Always") : Tr.get("value.one_in", "1 in %s", value);
+                    case "s" -> value <= 0 ? Tr.value("Off") : duration(value);
                     default -> String.valueOf(value);
                 };
             }
             case LIST -> {
                 int size = getList(spec.key()).size();
-                yield size == 0 ? "Empty ›" : size + (size == 1 ? " item ›" : " items ›");
+                yield size == 0 ? Tr.get("ui.list.empty", "Empty ›")
+                        : size == 1 ? Tr.get("ui.list.one", "1 item ›") : Tr.get("ui.list.many", "%s items ›", size);
             }
             default -> "";
         };
@@ -408,7 +410,7 @@ public class CobblelockeConfigScreen extends Screen {
 
     private void openListEditor(Spec spec) {
         if (client != null) {
-            client.setScreen(new ListEditScreen(this, spec.label(), spec.description(), getList(spec.key()),
+            client.setScreen(new ListEditScreen(this, Tr.label(spec), Tr.description(spec), getList(spec.key()),
                     values -> {
                         set(spec.key(), values);
                         edited();
@@ -424,7 +426,28 @@ public class CobblelockeConfigScreen extends Screen {
         for (Preset preset : presets) {
             names.add(preset.name());
         }
-        client.setScreen(new ExportPresetScreen(this, config.toJson(), names));
+        client.setScreen(new ExportPresetScreen(this, config.toJson(), names, this::onExported));
+    }
+
+    // Mirrors ConfigFiles.exportPreset, so the switcher shows the new preset straight away. Nothing is
+    // saved to the world until Save or Start Run is pressed.
+    private void onExported(String name) {
+        CobblelockeConfig exported = config.copy();
+        exported.preset = name;
+        exported.runActive = false;
+        exported.configured = false;
+        Preset entry = new Preset(name, ConfigFiles.EXPORT_DESCRIPTION, exported.toJsonObject());
+        boolean replaced = false;
+        for (int i = 0; i < presets.size(); i++) {
+            if (presets.get(i).name().equalsIgnoreCase(name)) {
+                presets.set(i, entry);
+                replaced = true;
+            }
+        }
+        if (!replaced) {
+            presets.add(entry);
+        }
+        config.preset = name;
     }
 
     private void save(boolean startRun) {
@@ -499,19 +522,26 @@ public class CobblelockeConfigScreen extends Screen {
         int y = height - FOOTER_H + 6;
         int h = 18;
         int x = width - 12;
-        String[] labels = canEdit
-                ? new String[]{"Cancel", "Export", "Save", "Start Run!"}
-                : new String[]{"Close"};
-        for (String label : labels) {
+        String[] ids = canEdit
+                ? new String[]{"cancel", "export", "save", "start"}
+                : new String[]{"close"};
+        for (String id : ids) {
+            String label = switch (id) {
+                case "cancel" -> Tr.get("ui.cancel", "Cancel");
+                case "export" -> Tr.get("ui.export", "Export");
+                case "save" -> Tr.get("ui.save", "Save");
+                case "start" -> Tr.get("ui.start_run", "Start Run!");
+                default -> Tr.get("ui.close", "Close");
+            };
             int w = textRenderer.getWidth(label) + 28;
             x -= w;
-            Runnable action = switch (label) {
-                case "Export" -> this::openExport;
-                case "Save" -> () -> save(false);
-                case "Start Run!" -> () -> save(true);
+            Runnable action = switch (id) {
+                case "export" -> this::openExport;
+                case "save" -> () -> save(false);
+                case "start" -> () -> save(true);
                 default -> this::close;
             };
-            buttons.add(new FooterButton(label, label.equals("Start Run!"), x, y, w, h, action));
+            buttons.add(new FooterButton(label, id.equals("start"), x, y, w, h, action));
             x -= 8;
         }
         return buttons;
@@ -548,14 +578,15 @@ public class CobblelockeConfigScreen extends Screen {
         context.fill(boxX, boxY + 18, boxX + boxW, boxY + 20, Theme.ACCENT);
         context.drawText(textRenderer, "◀", boxX + 6, boxY + 6, Theme.ACCENT, false);
         context.drawText(textRenderer, "▶", boxX + boxW - 12, boxY + 6, Theme.ACCENT, false);
-        String label = textRenderer.trimToWidth(config.preset, boxW - 40);
+        String shownPreset = "Custom".equals(config.preset) ? Tr.value("Custom") : config.preset;
+        String label = textRenderer.trimToWidth(shownPreset, boxW - 40);
         context.drawText(textRenderer, label, boxX + (boxW - textRenderer.getWidth(label)) / 2, boxY + 6,
                 Theme.TEXT, false);
-        String caption = "PRESET";
+        String caption = Tr.get("ui.preset", "PRESET");
         context.drawText(textRenderer, caption, boxX + (boxW - textRenderer.getWidth(caption)) / 2, 2,
                 Theme.TEXT_MUTED, false);
         if (!canEdit) {
-            String readOnly = "Read only";
+            String readOnly = Tr.get("ui.read_only", "Read only");
             context.drawText(textRenderer, readOnly, width - textRenderer.getWidth(readOnly) - 12,
                     boxY + 6, Theme.ACCENT, false);
         }
@@ -574,7 +605,7 @@ public class CobblelockeConfigScreen extends Screen {
             int fill = active ? Theme.ACCENT : hovered ? Theme.MAIN : Theme.MAIN_DARK;
             context.fill(x, y, x + tabW - 2, y + TAB_H - 2, fill);
             context.fill(x, y + TAB_H - 4, x + tabW - 2, y + TAB_H - 2, active ? Theme.ACCENT_DARK : Theme.MAIN_DEEP);
-            String title = tabs[i].title;
+            String title = textRenderer.trimToWidth(Tr.tab(tabs[i]), tabW - 6);
             context.drawText(textRenderer, title, x + (tabW - 2 - textRenderer.getWidth(title)) / 2, y + 5,
                     active ? Theme.TEXT_ON_ACCENT : Theme.TEXT, false);
         }
@@ -617,8 +648,9 @@ public class CobblelockeConfigScreen extends Screen {
     }
 
     private void drawHeading(DrawContext context, Spec spec, int left, int y, int right) {
-        context.drawText(textRenderer, spec.label().toUpperCase(), left + 4, y + 8, Theme.ACCENT, false);
-        int lineX = left + 10 + textRenderer.getWidth(spec.label().toUpperCase());
+        String heading = Tr.label(spec).toUpperCase(java.util.Locale.ROOT);
+        context.drawText(textRenderer, heading, left + 4, y + 8, Theme.ACCENT, false);
+        int lineX = left + 10 + textRenderer.getWidth(heading);
         context.fill(lineX, y + 11, right - 4, y + 12, 0x44FFCB05);
     }
 
@@ -638,7 +670,7 @@ public class CobblelockeConfigScreen extends Screen {
         }
 
         int labelWidth = valueLeft() - left - indent - 12 - (isAnimationRow(spec) ? 26 : 0);
-        String label = textRenderer.trimToWidth(spec.label(), labelWidth);
+        String label = textRenderer.trimToWidth(Tr.label(spec), labelWidth);
         context.drawText(textRenderer, label, left + indent + 6, y + 6, labelColour, false);
 
         int valueColour = isSelected ? Theme.TEXT_ON_ACCENT
@@ -753,16 +785,16 @@ public class CobblelockeConfigScreen extends Screen {
         String body;
         Spec spec = selected >= 0 && selected < rows.size() ? rows.get(selected) : null;
         if (spec != null && !spec.isHeading()) {
-            title = spec.label();
-            body = spec.description();
+            title = Tr.label(spec);
+            body = Tr.description(spec);
             if (spec.key().equals("disableRaidCatch") && !raidDensInstalled) {
-                body += " Cobblemon Raid Dens is not installed, so this has no effect.";
+                body += " " + Tr.get("ui.no_raid_dens", "Cobblemon Raid Dens is not installed, so this has no effect.");
             }
         } else {
             Preset preset = currentPreset();
-            title = preset != null ? preset.name() : "Custom rules";
+            title = preset != null ? preset.name() : Tr.get("ui.custom_rules", "Custom rules");
             body = preset != null ? preset.description()
-                    : "Hover or use the arrow keys to pick an option. Q and E switch tabs.";
+                    : Tr.get("ui.pick_hint", "Hover or use the arrow keys to pick an option. Q and E switch tabs.");
         }
         context.fill(left, top, left + 3, top + 12, Theme.ACCENT);
         context.drawText(textRenderer, title, left + 9, top + 2, Theme.TEXT, true);
@@ -776,7 +808,7 @@ public class CobblelockeConfigScreen extends Screen {
     private void drawFooter(DrawContext context, int mouseX, int mouseY) {
         context.fill(0, height - FOOTER_H, width, height, Theme.MAIN);
         context.fill(0, height - FOOTER_H, width, height - FOOTER_H + 2, Theme.ACCENT);
-        context.drawText(textRenderer, "Q/E: tabs   ◀ ▶: change   ↑ ↓: select", 12, height - FOOTER_H + 11,
+        context.drawText(textRenderer, Tr.get("ui.keys", "Q/E: tabs   ◀ ▶: change   ↑ ↓: select"), 12, height - FOOTER_H + 11,
                 Theme.TEXT_MUTED, false);
         for (FooterButton button : footerButtons()) {
             Theme.button(context, textRenderer, button.label(), button.x(), button.y(), button.width(),

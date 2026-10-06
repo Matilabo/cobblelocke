@@ -103,6 +103,8 @@ public final class ConfigFiles {
             out.append("  // any: any player can enter any command. only set this if you trust other "
                     + "players to not do\n");
             out.append("  // /cobblelocke reset @a\n");
+            out.append("  // In every mode, any player can use /cobblelocke status, /cobblelocke here and "
+                    + "/cobblelocke hints.\n");
             out.append("  \"serverConfigMode\": ").append(GSON.toJson(config.serverConfigMode))
                     .append(",\n");
             out.append("  // Spawn cap timing (true or false).\n");
@@ -369,9 +371,9 @@ public final class ConfigFiles {
         config.preset = "Custom";
 
         config.nuzlockeModeEnabled = true;
-        config.oneCatchPerBiome = true;
-        config.oneCatchPerRegion = 0;
-        config.capSpawningPerRegionChunks = 0;
+        config.oneCatchPerBiome = false;
+        config.oneCatchPerRegion = 2048;
+        config.capSpawningPerRegionChunks = 8;
         config.capSpawningPerRegionCount = 1;
         config.capSpawningPerRegionMemory = false;
         config.capSpawningPerRegionByPlayer = false;
@@ -387,6 +389,8 @@ public final class ConfigFiles {
         config.catchCooldownSeconds = 0;
 
         config.firstCatchEventLocked = true;
+        config.isExtraCatch = true;
+        config.eventLockRegion = 0;
         config.eventLevelMode = 0;
         config.applyAnimationPreset("minecraft");
         config.disableRaidCatch = true;
@@ -526,6 +530,8 @@ public final class ConfigFiles {
         config.preset = CLASSIC_RANDOMLOCKE;
         config.releaseFainted = false;
         config.firstCatchEventLocked = true;
+        config.isExtraCatch = true;
+        config.eventLockRegion = 0;
         config.randomStarters = true;
         config.offeredStarterTrios = 1;
         config.startersNoLegendaries = true;

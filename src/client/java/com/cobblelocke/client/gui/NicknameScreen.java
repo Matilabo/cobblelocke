@@ -52,13 +52,13 @@ public class NicknameScreen extends Screen {
         context.fill(left, top, left + panelW, height / 2 + 52, Theme.PANEL);
         context.fill(left, top, left + panelW, top + 22, Theme.MAIN);
         context.fill(left, top + 20, left + panelW, top + 22, Theme.ACCENT);
-        String header = "You caught " + species + "!";
+        String header = Tr.get("ui.nickname.header", "You caught %s!", Tr.species(species));
         context.drawText(textRenderer, header, (width - textRenderer.getWidth(header)) / 2, top + 7, Theme.TEXT, false);
-        String prompt = "Give it a nickname (Nuzlocke rule)";
+        String prompt = Tr.get("ui.nickname.prompt", "Give it a nickname (Nuzlocke rule)");
         context.drawText(textRenderer, prompt, (width - textRenderer.getWidth(prompt)) / 2, top + 32,
                 Theme.TEXT_MUTED, false);
         field.render(context, mouseX, mouseY, delta);
-        Theme.button(context, textRenderer, "Confirm", buttonX(), buttonY(), 100, 18, true,
+        Theme.button(context, textRenderer, Tr.get("ui.confirm", "Confirm"), buttonX(), buttonY(), 100, 18, true,
                 Theme.inside(mouseX, mouseY, buttonX(), buttonY(), 100, 18), canConfirm());
     }
 

@@ -1,5 +1,7 @@
 package com.cobblelocke.net;
 
+import net.minecraft.util.Formatting;
+import com.cobblelocke.util.Lang;
 import com.cobblelocke.Cobblelocke;
 import com.cobblelocke.config.CobblelockeConfig;
 import com.cobblelocke.config.ConfigFiles;
@@ -47,21 +49,22 @@ public final class CobblelockeNetworking {
             return;
         }
         if (!state.canEditConfig(player)) {
-            player.sendMessage(Text.literal("§cOnly the host or an operator can export a preset."));
+            player.sendMessage(Lang.tr("export.denied", "§cOnly the host or an operator can export a preset."));
             return;
         }
         CobblelockeConfig exported = CobblelockeConfig.fromJson(payload.configJson());
-        player.sendMessage(Text.literal(exportMessage(payload.name(),
-                ConfigFiles.exportPreset(payload.name(), exported))));
+        player.sendMessage(exportMessage(payload.name(), ConfigFiles.exportPreset(payload.name(), exported)));
     }
 
-    public static String exportMessage(String name, ConfigFiles.ExportResult result) {
+    public static Text exportMessage(String name, ConfigFiles.ExportResult result) {
+        Text shown = Lang.hl(name, Formatting.WHITE);
         return switch (result) {
-            case ADDED -> "§aSaved these settings as the preset §f" + name
-                    + "§a. §7It is in presets.json5 and in the preset switcher.";
-            case REPLACED -> "§aReplaced the preset §f" + name
-                    + "§a with these settings. §7It is in presets.json5 and in the preset switcher.";
-            case FAILED -> "§cCould not write the preset. Check the log and config/cobblelocke/presets.json5.";
+            case ADDED -> Lang.tr("export.added", "§aSaved these settings as the preset %s§a. §7It is in "
+                    + "presets.json5 and in the preset switcher.", shown);
+            case REPLACED -> Lang.tr("export.replaced", "§aReplaced the preset %s§a with these settings. §7It is "
+                    + "in presets.json5 and in the preset switcher.", shown);
+            case FAILED -> Lang.tr("export.failed", "§cCould not write the preset. Check the log and "
+                    + "config/cobblelocke/presets.json5.");
         };
     }
 
@@ -71,8 +74,8 @@ public final class CobblelockeNetworking {
             return;
         }
         if (!ServerPlayNetworking.canSend(player, OpenConfigPayload.ID)) {
-            player.sendMessage(Text.literal("§cCobblelocke is not installed on your client, so the "
-                    + "config screen cannot open. Use /cobblelocke set, or edit config/cobblelocke/config.json5."));
+            player.sendMessage(Lang.tr("config.no_client", "§cCobblelocke is not installed on your client, so "
+                    + "the config screen cannot open. Use /cobblelocke set, or edit config/cobblelocke/config.json5."));
             return;
         }
         ServerPlayNetworking.send(player, new OpenConfigPayload(
@@ -97,7 +100,8 @@ public final class CobblelockeNetworking {
         }
 
         if (!state.canEditConfig(player)) {
-            player.sendMessage(Text.literal("§cOnly the host or an operator can change Cobblelocke settings."));
+            player.sendMessage(Lang.tr("config.denied", "§cOnly the host or an operator can change Cobblelocke "
+                    + "settings."));
             return;
         }
 
@@ -114,27 +118,31 @@ public final class CobblelockeNetworking {
         if (payload.startRun()) {
             startFreshRun(player, state, saved);
         } else {
-            player.sendMessage(Text.literal("§aCobblelocke settings saved. §7Nothing was reset or "
+            player.sendMessage(Lang.tr("config.saved", "§aCobblelocke settings saved. §7Nothing was reset or "
                     + "re-randomized."));
         }
         Cobblelocke.LOGGER.info("{} saved the Cobblelocke config (run active: {})",
                 player.getName().getString(), saved.runActive);
     }
 
+    public static void rerollGlobalPools(CobblelockeConfig config) {
+        GlobalPools pools = GlobalPools.get();
+        if (pools != null) {
+            pools.reset();
+            if (config.anyGlobalPool()) {
+                pools.prefillAll(config);
+            }
+        }
+    }
+
     public static void startFreshRun(ServerPlayerEntity player, CobblelockeState state,
                                      CobblelockeConfig saved) {
         state.resetRun();
         EventLockService.reset();
-        GlobalPools pools = GlobalPools.get();
-        if (pools != null) {
-            pools.reset();
-            if (saved.anyGlobalPool()) {
-                pools.prefillAll(saved);
-            }
-        }
+        rerollGlobalPools(saved);
         if (player != null) {
-            player.sendMessage(Text.literal("§d★ A new Cobblelocke run has begun. §7Catches, deaths "
-                    + "and event progress were cleared, and everything was randomized again."));
+            player.sendMessage(Lang.tr("config.new_run", "§d★ A new Cobblelocke run has begun. §7Catches, "
+                    + "deaths and event progress were cleared, and everything was randomized again."));
         }
         Cobblelocke.LOGGER.info("A new Cobblelocke run was started");
     }

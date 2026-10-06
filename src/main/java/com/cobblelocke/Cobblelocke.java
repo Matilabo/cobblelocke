@@ -1,5 +1,7 @@
 package com.cobblelocke;
 
+import net.minecraft.util.Formatting;
+import com.cobblelocke.util.Lang;
 import com.cobblelocke.command.CobblelockeCommand;
 import com.cobblelocke.compat.GymLeaders;
 import com.cobblelocke.config.CobblelockeConfig;
@@ -49,6 +51,7 @@ public class Cobblelocke implements ModInitializer {
         CobblelockeNetworking.register();
         RandomizerService.register();
         NuzlockeService.register();
+        com.cobblelocke.nuzlocke.CatchCheck.register();
 
         if (FabricLoader.getInstance().isModLoaded("cobblemonraiddens")) {
             com.cobblelocke.compat.RaidDensCompat.register();
@@ -84,6 +87,7 @@ public class Cobblelocke implements ModInitializer {
 
         GymLeaders.known();
         EventLockService.reset();
+        com.cobblelocke.nuzlocke.CatchCheck.reset();
 
         Path worldDirectory = startedServer.getSavePath(WorldSavePath.ROOT);
         long worldSeed = startedServer.getOverworld().getSeed();
@@ -124,6 +128,7 @@ public class Cobblelocke implements ModInitializer {
             NuzlockeService.tick();
             RandomizerService.tick(tickingServer);
             EventLockService.tick(tickingServer);
+            com.cobblelocke.nuzlocke.CatchCheck.tick(tickingServer);
         } catch (Exception e) {
             LOGGER.error("Cobblelocke tick failed: {}", e.toString());
         }
@@ -143,11 +148,14 @@ public class Cobblelocke implements ModInitializer {
 
         current.execute(() -> current.execute(() -> {
             NicknameService.resendPending(player);
+            if (state.getPlayer(player.getUuid()).isStarterChoicePending()) {
+                CobblelockeCommand.offerStarterAgain(player, state);
+            }
             if (state.getConfig().configured || !state.isAdmin(player)) {
                 return;
             }
-            player.sendMessage(Text.literal("§dWelcome to Cobblelocke. §7Configure your run below, "
-                    + "or reopen it any time with §f/cobblelocke config§7."));
+            player.sendMessage(Lang.tr("welcome", "§dWelcome to Cobblelocke. §7Configure your run below, or "
+                    + "reopen it any time with §f/cobblelocke config§7."));
             CobblelockeNetworking.sendOpenConfig(player);
         }));
     }

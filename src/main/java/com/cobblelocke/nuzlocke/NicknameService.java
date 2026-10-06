@@ -1,5 +1,7 @@
 package com.cobblelocke.nuzlocke;
 
+import net.minecraft.util.Formatting;
+import com.cobblelocke.util.Lang;
 import com.cobblelocke.Cobblelocke;
 import com.cobblelocke.data.CobblelockeState;
 import com.cobblelocke.data.PlayerState;
@@ -86,7 +88,8 @@ public final class NicknameService {
         pokemon.setNickname(Text.literal(name));
         playerState.removePendingNickname(payload.pokemonId());
         state.markDirty();
-        player.sendMessage(Text.literal("§aYour " + pokemon.getSpecies().getName() + " is now called §f" + name + "§a."));
+        player.sendMessage(Lang.tr("nickname.set", "§aYour %1$s is now called %2$s§a.",
+                Lang.species(pokemon.getSpecies()), Lang.hl(name, Formatting.WHITE)));
     }
 
     static String clean(String raw) {
