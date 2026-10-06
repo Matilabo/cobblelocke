@@ -406,7 +406,7 @@ public final class EventLockService {
                 }
                 // The encounter is gone, so its region is taken from where the player stands.
                 RegistryKey<Biome> standing = Worlds.biomeAt(player);
-                if (config.oneCatchPerRegion > 0 && standing != null) {
+                if (config.escapesUseRegion() && config.oneCatchPerRegion > 0 && standing != null) {
                     BiomeInstanceKey region = BiomeInstanceKey.fromPosition(standing, player.getBlockPos(),
                             config.oneCatchPerRegion);
                     if (!playerState.hasCapturedInInstance(region)) {

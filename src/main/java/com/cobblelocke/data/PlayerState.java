@@ -51,11 +51,8 @@ public class PlayerState {
 
     private final Map<String, CatchRecord> catchRecords = new HashMap<>();
 
-    // Survive resets on purpose: the roll keeps each re-offered starter choice different, and the
-    // pending flag reopens the choice for a player who was offline when they were reset.
+    // Survives resets on purpose: it keeps each re-offered starter choice different.
     private int starterRoll = 0;
-
-    private boolean starterChoicePending = false;
 
     public PlayerState(UUID playerId) {
         this.playerId = playerId;
@@ -225,14 +222,6 @@ public class PlayerState {
         starterRoll++;
     }
 
-    public boolean isStarterChoicePending() {
-        return starterChoicePending;
-    }
-
-    public void setStarterChoicePending(boolean pending) {
-        this.starterChoicePending = pending;
-    }
-
     public static String biomeRecord(String biomeId) {
         return "biome|" + biomeId;
     }
@@ -264,7 +253,6 @@ public class PlayerState {
 
     public void resetProgress() {
         pendingEvents.clear();
-        hasChosenStarter = false;
         deadPokemon.clear();
         caughtSpecies.clear();
         biomeCaptures.clear();
@@ -285,7 +273,6 @@ public class PlayerState {
         tag.putBoolean("LeftStartingBiome", leftStartingBiome);
         tag.putBoolean("CatchHints", catchHints);
         tag.putInt("StarterRoll", starterRoll);
-        tag.putBoolean("StarterChoicePending", starterChoicePending);
         if (startingBiome != null) {
             tag.putString("StartingBiome", startingBiome);
         }
@@ -341,7 +328,6 @@ public class PlayerState {
         state.leftStartingBiome = tag.getBoolean("LeftStartingBiome");
         state.catchHints = !tag.contains("CatchHints") || tag.getBoolean("CatchHints");
         state.starterRoll = tag.getInt("StarterRoll");
-        state.starterChoicePending = tag.getBoolean("StarterChoicePending");
         if (tag.contains("StartingBiome")) {
             state.startingBiome = tag.getString("StartingBiome");
         }

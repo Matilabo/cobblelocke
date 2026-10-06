@@ -148,9 +148,6 @@ public class Cobblelocke implements ModInitializer {
 
         current.execute(() -> current.execute(() -> {
             NicknameService.resendPending(player);
-            if (state.getPlayer(player.getUuid()).isStarterChoicePending()) {
-                CobblelockeCommand.offerStarterAgain(player, state);
-            }
             if (state.getConfig().configured || !state.isAdmin(player)) {
                 return;
             }

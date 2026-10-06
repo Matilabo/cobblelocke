@@ -27,6 +27,11 @@ public final class StatusReport {
     }
 
     private void build(CobblelockeConfig config, boolean askOnFirstJoin) {
+        if (config.configVersion < CobblelockeConfig.CURRENT_VERSION) {
+            lines.add(Lang.tr("status.version", "§7Rules version: %1$s §8(made with an older version, so its "
+                    + "rules play as they did then; Start Run! moves it to version %2$s)",
+                    Lang.hl(config.configVersion, Formatting.WHITE), CobblelockeConfig.CURRENT_VERSION));
+        }
         if (askOnFirstJoin) {
             lines.add(Lang.tr("status.asks", "§7Asks for rules on a new world"));
         }

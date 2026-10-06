@@ -313,19 +313,10 @@ public final class CobblelockeCommand {
             state.resetRun();
             EventLockService.reset();
             CobblelockeNetworking.rerollGlobalPools(state.getConfig());
-            // Everyone gets a fresh starter choice: online players now, the rest when they next join.
-            for (PlayerState playerState : state.getPlayers().values()) {
-                playerState.setStarterChoicePending(true);
-            }
-            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
-                online.sendMessage(Lang.tr("command.reset.yours", "§cYour Cobblelocke run was reset."));
-                offerStarterAgain(online, state);
-            }
             state.markDirty();
             source.sendFeedback(() -> Lang.tr("command.reset.everyone", "§cCobblelocke run progress reset for "
-                    + "everyone. Catch history, permadeath records and event-lock progress are cleared, the "
-                    + "global pools were re-rolled and everyone gets a new starter choice. The spawn cap and "
-                    + "the regions it remembers are kept."), true);
+                    + "everyone. Catch history, permadeath records and event-lock progress are cleared and the "
+                    + "global pools were re-rolled. The spawn cap and the regions it remembers are kept."), true);
             return Math.max(1, server.getPlayerManager().getCurrentPlayerCount());
         }
         List<String> names = new ArrayList<>();
@@ -334,12 +325,11 @@ public final class CobblelockeCommand {
             EventLockService.reset(target.getUuid());
             names.add(target.getName().getString());
             target.sendMessage(Lang.tr("command.reset.yours", "§cYour Cobblelocke run was reset."));
-            offerStarterAgain(target, state);
         }
         state.markDirty();
-        source.sendFeedback(() -> Lang.tr("command.reset.players", "§cCobblelocke run progress reset for %s§c, "
-                + "with a new starter choice. §7Nobody else was touched and the global pools were kept; run "
-                + "§f/cobblelocke reset§7 with no player to clear the whole world.",
+        source.sendFeedback(() -> Lang.tr("command.reset.players", "§cCobblelocke run progress reset for %s§c. "
+                + "§7Nobody else was touched and the global pools were kept; run §f/cobblelocke reset§7 with no "
+                + "player to clear the whole world.",
                 Lang.hl(String.join(", ", names), Formatting.WHITE)), true);
         return names.size();
     }
@@ -521,11 +511,9 @@ public final class CobblelockeCommand {
 
     // Reopens Cobblemon's starter prompt with a freshly rolled set of starters. The global pools are
     // left alone: only a world-wide reset or a new run re-rolls those.
-    public static boolean offerStarterAgain(ServerPlayerEntity target, CobblelockeState state) {
+    private static boolean offerStarterAgain(ServerPlayerEntity target, CobblelockeState state) {
         try {
-            PlayerState rolling = state.getPlayer(target.getUuid());
-            rolling.bumpStarterRoll();
-            rolling.setStarterChoicePending(false);
+            state.getPlayer(target.getUuid()).bumpStarterRoll();
             state.markDirty();
             GeneralPlayerData data = Cobblemon.INSTANCE.getPlayerDataManager().getGenericData(target);
             data.setStarterPrompted(false);

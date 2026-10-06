@@ -107,6 +107,10 @@ public final class CobblelockeNetworking {
 
         CobblelockeConfig incoming = CobblelockeConfig.fromJson(payload.configJson());
         incoming.configured = true;
+        if (payload.startRun()) {
+            // A new run plays by the current version's rules.
+            incoming.configVersion = CobblelockeConfig.CURRENT_VERSION;
+        }
         incoming.runActive = payload.startRun() || state.getConfig().runActive;
 
         state.saveConfig(incoming, payload.startRun());

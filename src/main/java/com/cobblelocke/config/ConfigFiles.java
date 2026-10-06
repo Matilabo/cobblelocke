@@ -120,6 +120,11 @@ public final class ConfigFiles {
             out.append("  // The default preset that the mod uses, by default it's the settings below but if "
                     + "you change this it will load from presets.json5\n");
             out.append("  \"preset\": ").append(GSON.toJson(config.preset)).append(",\n");
+            out.append("  // The rules version this config was made with. A world keeps playing by the rules of "
+                    + "its version\n");
+            out.append("  // after an update; Start Run! moves it to the current version ("
+                    + CobblelockeConfig.CURRENT_VERSION + "). Older configs without this line count as 1.\n");
+            out.append("  \"configVersion\": ").append(config.configVersion).append(",\n");
 
             for (String line : optionLines(values)) {
                 out.append(line).append('\n');
@@ -270,6 +275,7 @@ public final class ConfigFiles {
         out.append("      \"name\": ").append(GSON.toJson(name)).append(",\n");
         out.append("      \"description\": ").append(GSON.toJson(description)).append(",\n");
         out.append("      \"rules\": {\n");
+        out.append("        \"configVersion\": ").append(CobblelockeConfig.versionOf(rules)).append(",\n");
         for (String line : optionLines(rules)) {
             out.append(line.startsWith("\n") ? "\n    " + line.substring(1) : "    " + line).append('\n');
         }

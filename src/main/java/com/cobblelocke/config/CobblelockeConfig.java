@@ -16,6 +16,14 @@ import java.util.Map;
 public class CobblelockeConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
+    // The rules version a config was made with. A config written before versioning has no
+    // configVersion and counts as 1. When an update changes how a rule plays, the new behaviour is
+    // gated on the version (see the helpers below), so a world keeps the rules it was set up with
+    // until a new run is started. Bump CURRENT_VERSION and add a Migration whenever that happens.
+    public static final int CURRENT_VERSION = 2;
+
+    public int configVersion = CURRENT_VERSION;
+
     public boolean configured = false;
 
     public String serverConfigMode = "read-only";
@@ -210,6 +218,17 @@ public class CobblelockeConfig {
 
     public boolean disableRaidCatch = false;
 
+    // Version 2: with One Catch Per Biome and One Catch Per Region both on, the biome's catch is an
+    // extra catch on top of the region's. Version 1 used up both with every catch.
+    public boolean biomeCatchIsExtra() {
+        return configVersion >= 2;
+    }
+
+    // Version 2: an event encounter that escapes also uses up the region the player stands in.
+    public boolean escapesUseRegion() {
+        return configVersion >= 2;
+    }
+
     public boolean wild(boolean rule) {
         return randomSpawns && rule;
     }
@@ -336,6 +355,7 @@ public class CobblelockeConfig {
 
     private static JsonObject coerce(JsonObject object) {
         JsonObject out = object.deepCopy();
+        migrate(out);
         expandRanges(out);
         migrateRegionSize(out);
         migrateRetiredClips(out);
@@ -359,6 +379,56 @@ public class CobblelockeConfig {
             }
         }
         return out;
+    }
+
+    // One step per version that needs it, run in order on any config older than that version. A step
+    // pins whatever the older version did (new options it never had are written with the value that
+    // keeps the old behaviour) and renames or reshapes keys. Steps never raise configVersion: a world
+    // stays on its version so the behaviour checks above keep applying. They run on every load, so
+    // each one must be safe to repeat.
+    private record Migration(int version, java.util.function.Consumer<JsonObject> step) {
+    }
+
+    private static final List<Migration> MIGRATIONS = List.of(
+            // 2: Event Lock Extra Catch and Event Lock Region were added; version 1 had neither.
+            new Migration(2, out -> {
+                putIfMissing(out, "isExtraCatch", false);
+                putIfMissing(out, "eventLockRegion", 0);
+            }));
+
+    public static int versionOf(JsonObject object) {
+        JsonElement value = object.get("configVersion");
+        if (value == null || !value.isJsonPrimitive()) {
+            return 1;
+        }
+        try {
+            return Math.max(1, value.getAsInt());
+        } catch (RuntimeException e) {
+            return 1;
+        }
+    }
+
+    private static void migrate(JsonObject out) {
+        int version = versionOf(out);
+        out.addProperty("configVersion", version);
+        for (Migration migration : MIGRATIONS) {
+            if (version < migration.version()) {
+                migration.step().accept(out);
+            }
+        }
+    }
+
+    private static void putIfMissing(JsonObject out, String key, Object value) {
+        if (out.has(key)) {
+            return;
+        }
+        if (value instanceof Boolean flag) {
+            out.addProperty(key, flag);
+        } else if (value instanceof Number number) {
+            out.addProperty(key, number);
+        } else {
+            out.addProperty(key, String.valueOf(value));
+        }
     }
 
     private static final Map<String, String> RETIRED_CLIPS = Map.of(
@@ -455,6 +525,8 @@ public class CobblelockeConfig {
 
     public static CobblelockeConfig fromPreset(String name, JsonObject rules) {
         JsonObject merged = new CobblelockeConfig().toJsonObject();
+        // A preset without configVersion was written before versioning, so it is version 1.
+        merged.remove("configVersion");
         if (rules != null) {
             for (Map.Entry<String, JsonElement> entry : rules.entrySet()) {
                 merged.add(entry.getKey(), entry.getValue());

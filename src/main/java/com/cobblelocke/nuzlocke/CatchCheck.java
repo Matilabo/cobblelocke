@@ -157,7 +157,8 @@ public final class CatchCheck {
             } else {
                 boolean biomeUsed = config.oneCatchPerBiome && biomeId != null && playerState.hasCapturedInBiome(biomeId);
                 boolean regionUsed = region != null && playerState.hasCapturedInInstance(region);
-                boolean both = config.oneCatchPerBiome && biomeId != null && region != null;
+                boolean both = config.biomeCatchIsExtra() && config.oneCatchPerBiome && biomeId != null
+                        && region != null;
                 if (both) {
                     // The biome's catch is an extra one on top of the region's: blocked only once both are used.
                     if (biomeUsed && regionUsed) {

@@ -222,7 +222,8 @@ public final class NuzlockeService {
 
         BiomeInstanceKey regionKey = config.oneCatchPerRegion > 0 && biome != null
                 ? BiomeInstanceKey.fromPosition(biome, pos, config.oneCatchPerRegion) : null;
-        if (!extraCatch && config.oneCatchPerBiome && biomeId != null && regionKey != null) {
+        if (!extraCatch && config.biomeCatchIsExtra() && config.oneCatchPerBiome && biomeId != null
+                && regionKey != null) {
             if (!biomeTaken(playerState, biomeId, inProgress) || !regionTaken(playerState, regionKey, inProgress)) {
                 return null;
             }
@@ -282,7 +283,7 @@ public final class NuzlockeService {
         if (extraCatch) {
             return new Claim(null, null);
         }
-        if (eventCatch || biomeClaim == null || regionClaim == null) {
+        if (eventCatch || biomeClaim == null || regionClaim == null || !config.biomeCatchIsExtra()) {
             return new Claim(biomeClaim, regionClaim);
         }
         if (!regionTaken(playerState, regionClaim, inProgress)) {
